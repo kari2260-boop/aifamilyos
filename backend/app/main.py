@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.init_db import init_db
-from app.routers import auth, family
+from app.routers import auth, family, chat, knowledge
 
 
 @asynccontextmanager
@@ -30,6 +30,8 @@ app.add_middleware(
 # 注册路由
 app.include_router(auth.router, prefix="/api")
 app.include_router(family.router, prefix="/api")
+app.include_router(chat.router, prefix="/api")
+app.include_router(knowledge.router, prefix="/api")
 
 
 @app.get("/health")

@@ -59,6 +59,27 @@ class ApiClient {
   isLoggedIn(): boolean {
     return !!this.getToken();
   }
+
+  // 对话
+  async chatSend(agentType: string, message: string, conversationId?: string) {
+    return this.request("/chat/send", {
+      method: "POST",
+      body: JSON.stringify({
+        agent_type: agentType,
+        message,
+        conversation_id: conversationId || null,
+      }),
+    });
+  }
+
+  async getConversations(agentType?: string) {
+    const query = agentType ? `?agent_type=${agentType}` : "";
+    return this.request(`/chat/conversations${query}`);
+  }
+
+  async getMessages(conversationId: string) {
+    return this.request(`/chat/conversations/${conversationId}/messages`);
+  }
 }
 
 export const api = new ApiClient();
