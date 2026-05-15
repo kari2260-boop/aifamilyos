@@ -1,5 +1,7 @@
 # Environment
 .env
+.env.production
+nginx/ssl/
 
 # Python
 __pycache__/

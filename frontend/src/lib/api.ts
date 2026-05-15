@@ -80,6 +80,57 @@ class ApiClient {
   async getMessages(conversationId: string) {
     return this.request(`/chat/conversations/${conversationId}/messages`);
   }
+
+  // 管理后台
+  async adminStats() {
+    return this.request("/admin/stats");
+  }
+
+  async adminFamilies() {
+    return this.request("/admin/families");
+  }
+
+  async adminConversations() {
+    return this.request("/admin/conversations");
+  }
+
+  async adminConversationMessages(conversationId: string) {
+    return this.request(`/admin/conversations/${conversationId}/messages`);
+  }
+
+  async adminRisks() {
+    return this.request("/admin/risks");
+  }
+
+  async adminHandleRisk(riskId: string, notes: string) {
+    return this.request(`/admin/risks/${riskId}`, {
+      method: "PUT",
+      body: JSON.stringify({ handled: true, handler_notes: notes }),
+    });
+  }
+
+  async adminKnowledgeDocs() {
+    return this.request("/knowledge/docs");
+  }
+
+  async adminUploadKnowledge(file: File, category: string) {
+    const token = this.getToken();
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("category", category);
+
+    const res = await fetch(`${API_BASE}/knowledge/upload`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: "上传失败" }));
+      throw new Error(error.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  }
 }
 
 export const api = new ApiClient();
