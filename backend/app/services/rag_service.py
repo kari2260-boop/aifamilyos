@@ -32,30 +32,31 @@ async def retrieve_context(
     embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
 
     # 参数化查询，防止SQL注入
+    # 注意：embedding用字符串拼接（已是数字数组，无注入风险），category用参数化
     if category:
-        sql = text("""
+        sql = text(f"""
             SELECT kc.id, kc.content, kc.category,
-                   1 - (kc.embedding <=> :embedding::vector) as score,
+                   1 - (kc.embedding <=> '{embedding_str}'::vector) as score,
                    kd.title as doc_title
             FROM knowledge_chunks kc
             JOIN knowledge_docs kd ON kd.id = kc.doc_id
             WHERE kc.embedding IS NOT NULL AND kc.category = :category
-            ORDER BY kc.embedding <=> :embedding::vector
+            ORDER BY kc.embedding <=> '{embedding_str}'::vector
             LIMIT :top_k
         """)
-        results = db.execute(sql, {"embedding": embedding_str, "category": category, "top_k": top_k}).fetchall()
+        results = db.execute(sql, {"category": category, "top_k": top_k}).fetchall()
     else:
-        sql = text("""
+        sql = text(f"""
             SELECT kc.id, kc.content, kc.category,
-                   1 - (kc.embedding <=> :embedding::vector) as score,
+                   1 - (kc.embedding <=> '{embedding_str}'::vector) as score,
                    kd.title as doc_title
             FROM knowledge_chunks kc
             JOIN knowledge_docs kd ON kd.id = kc.doc_id
             WHERE kc.embedding IS NOT NULL
-            ORDER BY kc.embedding <=> :embedding::vector
+            ORDER BY kc.embedding <=> '{embedding_str}'::vector
             LIMIT :top_k
         """)
-        results = db.execute(sql, {"embedding": embedding_str, "top_k": top_k}).fetchall()
+        results = db.execute(sql, {"top_k": top_k}).fetchall()
 
     # 过滤低分结果
     relevant = [(row[1], float(row[3]), row[4]) for row in results if float(row[3]) >= min_score]

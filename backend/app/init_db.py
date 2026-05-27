@@ -1,6 +1,10 @@
 """
 数据库初始化脚本
-启动时自动创建所有表 + 启用 pgvector 扩展
+
+生产环境的数据库结构变更应使用 Alembic：
+    cd backend && alembic upgrade head
+
+这里保留 create_all 作为开发/首次启动兜底，只创建缺失的表，不负责修改已有表结构。
 """
 from sqlalchemy import text
 from app.database import engine, Base
