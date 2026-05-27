@@ -180,7 +180,7 @@ export default function AdminAssessmentPage() {
           {mode === "list" && (
             <div className="space-y-3">
               {loading && <p className="text-center text-muted-foreground text-sm">加载中...</p>}
-              {!loading && templates.length === 0 && <p className="text-center text-muted-foreground text-sm mt-8">暂无测评模板，点击右上角"新建测评"创建</p>}
+              {!loading && templates.length === 0 && <p className="text-center text-muted-foreground text-sm mt-8">暂无测评模板，点击右上角「新建测评」创建</p>}
               {templates.map((t) => (
                 <div key={t.id} className="bg-card border border-border rounded-xl p-4 shadow-sm">
                   <div className="flex items-center justify-between">

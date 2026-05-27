@@ -140,7 +140,7 @@ export default function CourseDetailPage() {
             <video
               controls
               className="w-full"
-              src={`http://${typeof window !== "undefined" ? window.location.hostname : "localhost"}:8000${course.external_url}`}
+              src={course.external_url}
               playsInline
             >
               您的浏览器不支持视频播放
