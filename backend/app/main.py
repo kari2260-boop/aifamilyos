@@ -1,6 +1,10 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from app.init_db import init_db
 from app.routers import auth, family, chat, knowledge, admin, booking, report, subscription, course, article, resource, prompt, assessment, consultation, analytics, upload, course_series
 
@@ -23,6 +27,11 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# 限流器
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -64,6 +73,17 @@ os.makedirs("/app/uploads/videos", exist_ok=True)
 os.makedirs("/app/uploads/images", exist_ok=True)
 app.mount("/api/static/videos", StaticFiles(directory="/app/uploads/videos"), name="videos")
 app.mount("/api/static/images", StaticFiles(directory="/app/uploads/images"), name="images")
+
+
+# 全局异常处理：500错误不暴露内部信息
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    import logging
+    logging.error(f"Unhandled error: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "服务器内部错误，请稍后重试"},
+    )
 
 
 @app.get("/health")

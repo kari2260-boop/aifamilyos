@@ -53,28 +53,31 @@ def list_families(
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """家庭列表"""
-    families = db.query(Family).order_by(Family.created_at.desc()).limit(100).all()
-    result = []
-    for f in families:
-        owner = db.query(User).filter(User.id == f.owner_user_id).first()
-        children_count = db.query(func.count(ChildProfile.id)).filter(
-            ChildProfile.family_id == f.id
-        ).scalar() or 0
-        conv_count = db.query(func.count(Conversation.id)).filter(
-            Conversation.family_id == f.id
-        ).scalar() or 0
-
-        result.append(AdminFamilyItem(
-            id=f.id,
-            family_name=f.family_name,
-            city=f.city,
-            owner_phone=owner.phone if owner else "未知",
-            children_count=children_count,
-            conversations_count=conv_count,
-            created_at=f.created_at,
-        ))
-    return result
+    """家庭列表（优化：单条SQL，避免N+1）"""
+    from sqlalchemy import text
+    sql = text("""
+        SELECT f.id, f.family_name, f.city, f.created_at,
+               u.phone as owner_phone,
+               (SELECT COUNT(*) FROM children_profiles cp WHERE cp.family_id = f.id) as children_count,
+               (SELECT COUNT(*) FROM conversations c WHERE c.family_id = f.id) as conv_count
+        FROM families f
+        JOIN users u ON u.id = f.owner_user_id
+        ORDER BY f.created_at DESC
+        LIMIT 200
+    """)
+    rows = db.execute(sql).fetchall()
+    return [
+        AdminFamilyItem(
+            id=row[0],
+            family_name=row[1],
+            city=row[2],
+            owner_phone=row[4],
+            children_count=row[5],
+            conversations_count=row[6],
+            created_at=row[3],
+        )
+        for row in rows
+    ]
 
 
 @router.get("/families/{family_id}")
