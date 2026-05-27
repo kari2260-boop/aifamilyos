@@ -107,25 +107,33 @@ async def search_knowledge(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Embedding生成失败: {str(e)}")
 
-    # pgvector 相似度检索
+    # pgvector 相似度检索（参数化查询，防SQL注入）
     embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
 
-    category_filter = ""
     if req.category:
-        category_filter = f"AND kc.category = '{req.category}'"
-
-    sql = text(f"""
-        SELECT kc.id, kc.content, kc.category,
-               1 - (kc.embedding <=> '{embedding_str}'::vector) as score,
-               kd.title as doc_title
-        FROM knowledge_chunks kc
-        JOIN knowledge_docs kd ON kd.id = kc.doc_id
-        WHERE kc.embedding IS NOT NULL {category_filter}
-        ORDER BY kc.embedding <=> '{embedding_str}'::vector
-        LIMIT :top_k
-    """)
-
-    results = db.execute(sql, {"top_k": req.top_k}).fetchall()
+        sql = text("""
+            SELECT kc.id, kc.content, kc.category,
+                   1 - (kc.embedding <=> :embedding::vector) as score,
+                   kd.title as doc_title
+            FROM knowledge_chunks kc
+            JOIN knowledge_docs kd ON kd.id = kc.doc_id
+            WHERE kc.embedding IS NOT NULL AND kc.category = :category
+            ORDER BY kc.embedding <=> :embedding::vector
+            LIMIT :top_k
+        """)
+        results = db.execute(sql, {"embedding": embedding_str, "category": req.category, "top_k": req.top_k}).fetchall()
+    else:
+        sql = text("""
+            SELECT kc.id, kc.content, kc.category,
+                   1 - (kc.embedding <=> :embedding::vector) as score,
+                   kd.title as doc_title
+            FROM knowledge_chunks kc
+            JOIN knowledge_docs kd ON kd.id = kc.doc_id
+            WHERE kc.embedding IS NOT NULL
+            ORDER BY kc.embedding <=> :embedding::vector
+            LIMIT :top_k
+        """)
+        results = db.execute(sql, {"embedding": embedding_str, "top_k": req.top_k}).fetchall()
 
     return KnowledgeSearchResponse(
         results=[

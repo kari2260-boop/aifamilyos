@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import PaywallModal from "@/components/PaywallModal";
+import ReactMarkdown from "react-markdown";
 
 interface CourseDetail {
   id: string;
@@ -161,10 +162,9 @@ export default function CourseDetailPage() {
         {/* 文章内容（长文类型） */}
         {course.content_type === "article" && course.content_markdown && (
           <div className={`mt-8 prose prose-neutral max-w-none relative ${isLocked ? "max-h-60 overflow-hidden" : ""}`}>
-            <div
-              className="text-foreground leading-relaxed whitespace-pre-wrap"
-              dangerouslySetInnerHTML={{ __html: course.content_markdown }}
-            />
+            <div className="text-foreground leading-relaxed">
+              <ReactMarkdown>{course.content_markdown}</ReactMarkdown>
+            </div>
             {isLocked && (
               <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/70 to-background pointer-events-none" />
             )}

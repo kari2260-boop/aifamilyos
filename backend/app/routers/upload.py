@@ -110,10 +110,20 @@ async def upload_image(
 
 
 # 文件访问接口（用户端播放/查看）
+from pathlib import Path
+
+def _safe_filepath(base_dir: str, filename: str) -> str:
+    """防止路径穿越攻击"""
+    resolved = Path(os.path.join(base_dir, filename)).resolve()
+    if not resolved.is_relative_to(Path(base_dir).resolve()):
+        raise HTTPException(status_code=403, detail="非法路径")
+    return str(resolved)
+
+
 @router.get("/files/videos/{filename}")
 async def serve_video(filename: str):
-    """提供视频文件访问（支持Range请求，可快进跳转）"""
-    filepath = os.path.join(VIDEO_DIR, filename)
+    """提供视频文件访问"""
+    filepath = _safe_filepath(VIDEO_DIR, filename)
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="文件不存在")
     file_size = os.path.getsize(filepath)
@@ -130,7 +140,7 @@ async def serve_video(filename: str):
 @router.get("/files/images/{filename}")
 async def serve_image(filename: str):
     """提供图片文件访问"""
-    filepath = os.path.join(IMAGE_DIR, filename)
+    filepath = _safe_filepath(IMAGE_DIR, filename)
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="文件不存在")
     # 根据扩展名设置 content type

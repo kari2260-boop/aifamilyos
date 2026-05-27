@@ -7,6 +7,11 @@ from app.routers import auth, family, chat, knowledge, admin, booking, report, s
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 安全检查：JWT密钥不能是默认值
+    from app.config import get_settings
+    settings = get_settings()
+    if settings.JWT_SECRET in ("change-me-in-production", "change-me-to-a-random-string", ""):
+        raise RuntimeError("安全错误：必须在.env中设置JWT_SECRET为强随机值")
     # 启动时初始化数据库
     init_db()
     yield
