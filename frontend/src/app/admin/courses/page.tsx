@@ -202,7 +202,7 @@ export default function AdminCoursesPage() {
                     const formData = new FormData();
                     formData.append("file", file);
                     try {
-                      const res = await fetch("/api/upload/image", {
+                      const res = await fetch(`${api.getBaseUrl()}/upload/image`, {
                         method: "POST",
                         headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` },
                         body: formData,
@@ -250,7 +250,7 @@ export default function AdminCoursesPage() {
                         const formData = new FormData();
                         formData.append("file", file);
                         try {
-                          const res = await fetch("/api/upload/video", {
+                          const res = await fetch(`${api.getBaseUrl()}/upload/video`, {
                             method: "POST",
                             headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` },
                             body: formData,

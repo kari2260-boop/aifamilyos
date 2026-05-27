@@ -1,10 +1,17 @@
-// API地址自动推断：优先使用环境变量；浏览器端默认走同域 /api，避免生产环境跨端口失效。
-function getApiBase(): string {
+// API地址自动推断：
+// - NEXT_PUBLIC_API_URL 显式配置时优先使用
+// - SSR/容器内使用 SERVER_API_URL 或 Docker 服务名
+// - 浏览器直连 :3000 时走同主机 :8000/api
+// - 正式域名/Nginx 反代时走同域 /api
+export function getApiBase(): string {
   if (process.env.NEXT_PUBLIC_API_URL) {
     return process.env.NEXT_PUBLIC_API_URL;
   }
   if (typeof window === "undefined") {
-    return "http://localhost:8000/api";
+    return process.env.SERVER_API_URL || "http://backend:8000/api";
+  }
+  if (window.location.port === "3000") {
+    return `${window.location.protocol}//${window.location.hostname}:8000/api`;
   }
   return "/api";
 }
@@ -12,6 +19,10 @@ function getApiBase(): string {
 const API_BASE = getApiBase();
 
 class ApiClient {
+  getBaseUrl(): string {
+    return API_BASE;
+  }
+
   private getToken(): string | null {
     if (typeof window === "undefined") return null;
     return localStorage.getItem("token");
