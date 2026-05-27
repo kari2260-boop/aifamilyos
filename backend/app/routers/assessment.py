@@ -11,9 +11,12 @@ POST /assessments/admin/templates    创建/更新测评模板
 GET  /assessments/admin/records      所有测评记录
 PUT  /assessments/admin/reports/{id} 审核发布报告
 """
+import json
+import tempfile
+from pathlib import Path
 from uuid import UUID
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Any, List, Optional
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime
@@ -24,6 +27,7 @@ from app.models.models import (
     User, Family, ChildProfile,
     AssessmentTemplate, AssessmentRecord, AssessmentReport,
 )
+from app.services.assessment_workbook_importer import upsert_templates_from_workbook
 
 router = APIRouter(prefix="/assessments", tags=["assessments"])
 
@@ -76,6 +80,13 @@ class ReportDetail(BaseModel):
     final_content_json: Optional[dict]
     status: str
     published_at: Optional[datetime]
+
+
+class WorkbookImportResponse(BaseModel):
+    created: int
+    updated: int
+    total: int
+    templates: list
 
 
 # ============ 用户端 API ============
@@ -182,6 +193,14 @@ async def submit_assessment(
     db.add(report)
     db.commit()
 
+    # 自动刷新成长画像标签，便于后续在后台看到测评带来的画像更新
+    try:
+        from app.services.tag_service import analyze_child_tags
+
+        await analyze_child_tags(str(child.id), db)
+    except Exception:
+        pass
+
     return {"status": "ok", "record_id": record.id, "message": "测评已提交，报告将在审核后发布"}
 
 
@@ -273,6 +292,32 @@ class ReportReviewRequest(BaseModel):
     consultant_notes: Optional[str] = None
     final_content_json: Optional[dict] = None
     action: str  # "publish" / "save_draft"
+
+
+@router.post("/admin/templates/import-xlsx", response_model=WorkbookImportResponse)
+async def import_templates_from_xlsx(
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """上传学习力测评 Excel，自动拆成多个测评模板"""
+    filename = (file.filename or "").lower()
+    if not filename.endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="请上传 .xlsx 文件")
+
+    with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+        tmp_path = tmp.name
+        content = await file.read()
+        tmp.write(content)
+
+    try:
+        result = upsert_templates_from_workbook(db, tmp_path)
+        return result
+    finally:
+        try:
+            Path(tmp_path).unlink(missing_ok=True)
+        except Exception:
+            pass
 
 
 @router.post("/admin/templates")
@@ -378,20 +423,119 @@ def review_report(
 
 # ============ 辅助函数 ============
 
+def _extract_question_scoring(question: dict) -> dict:
+    options = question.get("options", []) or []
+    scoring: dict[str, Any] = {
+        "type": question.get("type", "single"),
+        "dimension": question.get("dimension"),
+    }
+    if question.get("type") == "allocation":
+        scoring["left_dimension"] = question.get("left_dimension")
+        scoring["right_dimension"] = question.get("right_dimension")
+    option_map = {}
+    for opt in options:
+        option_map[str(opt.get("value", ""))] = opt
+    scoring["option_map"] = option_map
+    return scoring
+
+
 def _calculate_scores(questions_json: list, answers: list) -> dict:
-    """根据答题计算各维度得分"""
-    # 按选项值统计频率
-    value_counts: dict = {}
+    """根据答题计算总分、维度分、选项分布"""
+    value_counts: dict[str, int] = {}
+    dimension_details: dict[str, dict[str, Any]] = {}
+
     for ans in answers:
-        val = ans.get("selected_value", "")
+        val = str(ans.get("selected_value", ""))
         value_counts[val] = value_counts.get(val, 0) + 1
 
-    total = len(answers)
+        q_idx = ans.get("question_index", -1)
+        if q_idx < 0 or q_idx >= len(questions_json):
+            continue
+
+        question = questions_json[q_idx] or {}
+        scoring = _extract_question_scoring(question)
+        option = scoring["option_map"].get(val, {})
+        question_type = scoring["type"]
+
+        if question_type == "allocation":
+            try:
+                scale_value = max(1, min(5, int(val)))
+            except Exception:
+                scale_value = 3
+            left_points = 6 - scale_value
+            right_points = scale_value - 1
+            left_dim = scoring.get("left_dimension")
+            right_dim = scoring.get("right_dimension")
+            if left_dim:
+                detail = dimension_details.setdefault(left_dim, {"total": 0.0, "count": 0, "average": 0.0})
+                detail["total"] += left_points
+                detail["count"] += 1
+            if right_dim:
+                detail = dimension_details.setdefault(right_dim, {"total": 0.0, "count": 0, "average": 0.0})
+                detail["total"] += right_points
+                detail["count"] += 1
+            continue
+
+        dim = option.get("dimension") or scoring.get("dimension")
+        score = option.get("score")
+        if score is None:
+            try:
+                score = int(val)
+            except Exception:
+                score = 1 if val else 0
+
+        if dim:
+            detail = dimension_details.setdefault(dim, {"total": 0.0, "count": 0, "average": 0.0})
+            detail["total"] += float(score)
+            detail["count"] += 1
+
+    dimension_scores: dict[str, dict[str, Any]] = {}
+    for dim, detail in dimension_details.items():
+        count = detail["count"] or 1
+        average = round(detail["total"] / count, 2)
+        dimension_scores[dim] = {
+            "total": round(detail["total"], 2),
+            "count": count,
+            "average": average,
+        }
+
+    total_questions = len(questions_json)
+    answered = len(answers)
     return {
-        "total_questions": total,
-        "answered": len(answers),
+        "total_questions": total_questions,
+        "answered": answered,
         "value_distribution": value_counts,
-        "completion_rate": round(len(answers) / max(len(questions_json), 1) * 100, 1),
+        "dimension_scores": dimension_scores,
+        "completion_rate": round(answered / max(total_questions, 1) * 100, 1),
+    }
+
+
+def _build_score_summary(scores: dict) -> dict:
+    dimension_scores = scores.get("dimension_scores", {}) or {}
+    ranked = sorted(
+        dimension_scores.items(),
+        key=lambda item: (item[1].get("average", 0), item[1].get("total", 0)),
+        reverse=True,
+    )
+    top_dimensions = [
+        {"dimension": dim, **detail}
+        for dim, detail in ranked[:3]
+    ]
+    lowest_dimensions = [
+        {"dimension": dim, **detail}
+        for dim, detail in sorted(
+            dimension_scores.items(),
+            key=lambda item: (item[1].get("average", 0), item[1].get("total", 0)),
+        )[:3]
+    ]
+    return {
+        "completion_rate": scores.get("completion_rate", 0),
+        "total_questions": scores.get("total_questions", 0),
+        "answered": scores.get("answered", 0),
+        "value_distribution": scores.get("value_distribution", {}),
+        "dimension_scores": dimension_scores,
+        "top_dimensions": top_dimensions,
+        "lowest_dimensions": lowest_dimensions,
     }
 
 
@@ -415,10 +559,16 @@ async def _generate_ai_report(child, template, answers: list, scores: dict) -> d
                         break
                 answer_summary += f"Q: {q.get('question', '')} → {option_text}\n"
 
+        score_summary = _build_score_summary(scores)
+        score_summary_text = json.dumps(score_summary, ensure_ascii=False, indent=2)
+
         prompt = f"""你是一位儿童发展评估专家。请根据以下测评结果，生成一份简要的评估报告。
 
 孩子信息：{child.name}，{child.age or '未知'}岁，{child.grade or '未知'}年级
 测评类型：{template.title}（{template.category}）
+
+自动评分摘要：
+{score_summary_text}
 
 答题结果：
 {answer_summary}
@@ -437,7 +587,6 @@ async def _generate_ai_report(child, template, answers: list, scores: dict) -> d
         messages = [{"role": "user", "content": prompt}]
         reply, _, _, _ = await chat_completion(messages, temperature=0.3, max_tokens=1500)
 
-        import json
         json_str = reply
         if "```" in reply:
             json_str = reply.split("```")[1].strip()

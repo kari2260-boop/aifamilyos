@@ -30,6 +30,7 @@ const categoryLabels: Record<string, string> = {
   personality: "性格特征",
   subject_interest: "学科兴趣",
   learning_system: "学习系统",
+  mental_health: "心理健康",
 };
 
 export default function AssessmentPage() {

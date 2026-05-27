@@ -38,6 +38,7 @@ const categoryOptions = [
   { value: "personality", label: "性格特征" },
   { value: "subject_interest", label: "学科兴趣" },
   { value: "learning_system", label: "学习系统" },
+  { value: "mental_health", label: "心理健康" },
 ];
 
 export default function AdminAssessmentPage() {
@@ -59,6 +60,9 @@ export default function AdminAssessmentPage() {
   // 审核状态
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [consultantNotes, setConsultantNotes] = useState("");
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState("");
 
   useEffect(() => { loadTemplates(); }, []);
 
@@ -154,6 +158,25 @@ export default function AdminAssessmentPage() {
     } catch { alert("发布失败"); }
   };
 
+  const handleImportWorkbook = async () => {
+    if (!importFile) {
+      alert("请选择 Excel 文件");
+      return;
+    }
+    setImporting(true);
+    setImportMessage("");
+    try {
+      const result = await api.adminImportAssessmentWorkbook(importFile);
+      setImportMessage(`导入完成：新增 ${result.created} 个，更新 ${result.updated} 个，共 ${result.total} 个模板`);
+      setImportFile(null);
+      await loadTemplates();
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "导入失败");
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
     <AuthGuard>
       <div className="min-h-screen bg-background pb-20">
@@ -166,6 +189,22 @@ export default function AdminAssessmentPage() {
             <div className="flex gap-2">
               {mode === "list" && (
                 <>
+                  <label className="px-3 py-1.5 bg-white/10 text-white text-xs rounded-lg cursor-pointer">
+                    选择Excel
+                    <input
+                      type="file"
+                      accept=".xlsx"
+                      className="hidden"
+                      onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                    />
+                  </label>
+                  <button
+                    onClick={handleImportWorkbook}
+                    disabled={!importFile || importing}
+                    className="px-3 py-1.5 bg-white/20 text-white text-xs rounded-lg disabled:opacity-50"
+                  >
+                    {importing ? "导入中..." : "导入测评"}
+                  </button>
                   <button onClick={() => { loadRecords(); setMode("records"); }} className="px-3 py-1.5 bg-white/10 text-white text-xs rounded-lg">答题记录</button>
                   <button onClick={() => { resetForm(); setMode("create"); }} className="px-3 py-1.5 bg-white/20 text-white text-xs rounded-lg">新建测评</button>
                 </>
@@ -174,7 +213,13 @@ export default function AdminAssessmentPage() {
           </div>
         </div>
 
-        <div className="max-w-2xl mx-auto px-4 mt-6">
+          <div className="max-w-2xl mx-auto px-4 mt-6">
+
+          {mode === "list" && importMessage && (
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+              {importMessage}
+            </div>
+          )}
 
           {/* 模板列表 */}
           {mode === "list" && (

@@ -582,6 +582,24 @@ class ApiClient {
     });
   }
 
+  async adminImportAssessmentWorkbook(file: File) {
+    const token = this.getToken();
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await fetch(`${API_BASE}/assessments/admin/templates/import-xlsx`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: "导入失败" }));
+      throw new Error(error.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  }
+
   // 咨询记录
   async getMyConsultationRecords() {
     return this.request("/consultation/records");

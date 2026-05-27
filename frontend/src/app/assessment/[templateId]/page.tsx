@@ -9,6 +9,9 @@ interface Question {
   question: string;
   options: { label: string; value: string }[];
   type?: string;
+  scale_labels?: string[];
+  left_dimension?: string;
+  right_dimension?: string;
 }
 
 export default function AssessmentTakePage() {
@@ -153,21 +156,53 @@ export default function AssessmentTakePage() {
               </div>
 
               {/* 选项 */}
-              <div className="space-y-2">
-                {questions[currentIndex].options.map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => handleSelect(opt.value)}
-                    className={`w-full text-left px-4 py-3 rounded-xl border text-sm transition-all ${
-                      answers[currentIndex] === opt.value
-                        ? "border-primary bg-primary/10 text-primary font-medium"
-                        : "border-border bg-card text-foreground hover:border-primary/50"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
+              {questions[currentIndex].type === "allocation" ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    {questions[currentIndex].options.map((opt) => (
+                      <div key={opt.value} className="rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">
+                        <div className="font-medium text-foreground mb-1">{opt.value === "A" ? "选项A" : "选项B"}</div>
+                        {opt.label}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-5 gap-2">
+                    {(questions[currentIndex].scale_labels || ["更偏A", "偏A", "均衡", "偏B", "更偏B"]).map((label, idx) => {
+                      const value = String(idx + 1);
+                      return (
+                        <button
+                          key={value}
+                          onClick={() => handleSelect(value)}
+                          className={`px-2 py-3 rounded-xl border text-xs transition-all ${
+                            answers[currentIndex] === value
+                              ? "border-primary bg-primary/10 text-primary font-medium"
+                              : "border-border bg-card text-foreground hover:border-primary/50"
+                          }`}
+                        >
+                          <div className="font-medium">{value}</div>
+                          <div className="mt-1 leading-tight">{label}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {questions[currentIndex].options.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => handleSelect(opt.value)}
+                      className={`w-full text-left px-4 py-3 rounded-xl border text-sm transition-all ${
+                        answers[currentIndex] === opt.value
+                          ? "border-primary bg-primary/10 text-primary font-medium"
+                          : "border-border bg-card text-foreground hover:border-primary/50"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* 导航 */}
               <div className="flex gap-3">
