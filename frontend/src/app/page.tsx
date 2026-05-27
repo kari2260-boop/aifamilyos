@@ -1,58 +1,192 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import AuthGuard from "@/components/AuthGuard";
-import BottomNav from "@/components/BottomNav";
-import AgentCard from "@/components/AgentCard";
+import Link from "next/link";
+import { BlurFade } from "@/components/ui/blur-fade";
+import { api } from "@/lib/api";
 
 const agents = [
   {
     name: "学学",
     role: "学习策略师",
     description: "学习规划、方法指导、进度追踪",
-    color: "bg-blue-500",
+    icon: "📚",
     agentType: "xuexue",
   },
   {
     name: "创创",
     role: "创造引导师",
     description: "兴趣发现、项目设计、成果输出",
-    color: "bg-green-500",
+    icon: "🎨",
     agentType: "chuangchuang",
   },
   {
     name: "探探",
     role: "天赋测评师",
     description: "天赋评估、培养建议、动态调整",
-    color: "bg-purple-500",
+    icon: "🔮",
     agentType: "tantan",
   },
   {
     name: "伴伴",
     role: "成长陪伴师",
     description: "家长答疑、亲子沟通、资源推荐",
-    color: "bg-orange-500",
+    icon: "🤝",
     agentType: "banban",
   },
 ];
 
 export default function Home() {
+  const [courses, setCourses] = useState<Array<{id: string; title: string; category?: string}>>([]);
+  const [articles, setArticles] = useState<Array<{id: string; title: string; summary?: string; author?: string}>>([]);
+
+  useEffect(() => {
+    api.request("/courses?size=6").then(data => setCourses(Array.isArray(data) ? data : [])).catch(() => {});
+    api.request("/articles?size=5").then(data => setArticles(Array.isArray(data) ? data : [])).catch(() => {});
+  }, []);
+
   return (
     <AuthGuard>
-      <div className="min-h-screen bg-gray-50 pb-20">
-        {/* 顶部 */}
-        <div className="bg-white px-5 pt-12 pb-6">
-          <h1 className="text-xl font-bold text-gray-800">AI 家庭成长 OS</h1>
-          <p className="text-sm text-gray-400 mt-1">选择一位成长伙伴开始对话</p>
-        </div>
+      <div className="min-h-screen bg-background pb-24">
+        {/* Banner */}
+        <BlurFade delay={0.05}>
+          <div className="bg-gradient-to-br from-primary to-[#8B7355] px-6 pt-14 pb-10 rounded-b-3xl">
+            <h1 className="text-2xl font-bold text-white">AI 家庭成长社区</h1>
+            <p className="text-white/80 text-sm mt-2 leading-relaxed">
+              为孩子匹配专属成长伙伴，用 AI 陪伴每一步成长
+            </p>
+            <div className="mt-4 flex items-center gap-2">
+              <span className="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-xs text-white">
+                4位AI导师
+              </span>
+              <span className="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-xs text-white">
+                持续更新
+              </span>
+            </div>
+          </div>
+        </BlurFade>
 
-        {/* Agent 卡片 */}
-        <div className="px-4 mt-4 grid grid-cols-2 gap-3">
-          {agents.map((agent) => (
-            <AgentCard key={agent.agentType} {...agent} />
-          ))}
-        </div>
+        <div className="max-w-2xl mx-auto px-4">
+          {/* AI 智能体入口 */}
+          <div className="mt-6 grid grid-cols-2 gap-3">
+            {agents.map((agent, i) => (
+              <BlurFade key={agent.agentType} delay={0.1 + i * 0.06}>
+                <Link href={`/chat/${agent.agentType}`}>
+                  <div className="bg-card rounded-2xl shadow-sm p-4 transition-all hover:shadow-md active:scale-[0.97]">
+                    <div className="text-2xl mb-2">{agent.icon}</div>
+                    <h3 className="font-semibold text-foreground text-sm">{agent.name}</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">{agent.role}</p>
+                    <p className="text-xs text-muted-foreground/70 mt-2 leading-relaxed">
+                      {agent.description}
+                    </p>
+                  </div>
+                </Link>
+              </BlurFade>
+            ))}
+          </div>
 
-        <BottomNav />
+          {/* 最新课程 */}
+          <BlurFade delay={0.35}>
+            <Link href="/assessment">
+              <div className="mt-6 bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-100 rounded-2xl p-4 flex items-center gap-3 hover:shadow-md active:scale-[0.98] transition-all">
+                <div className="text-2xl">📋</div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-foreground text-sm">成长测评</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">了解孩子的学习风格、性格和兴趣方向</p>
+                </div>
+                <span className="text-xs text-violet-600 bg-violet-100 px-2 py-1 rounded-full">去测评</span>
+              </div>
+            </Link>
+          </BlurFade>
+
+          {/* 最新课程 */}
+          <BlurFade delay={0.4}>
+            <div className="mt-8">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-semibold text-foreground">最新课程</h2>
+                <Link href="/courses" className="text-xs text-primary">查看全部</Link>
+              </div>
+              <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
+                {courses.length > 0 ? courses.map((c) => (
+                  <Link key={c.id} href={`/courses/${c.id}`} className="flex-shrink-0 w-44">
+                    <div className="bg-card rounded-2xl shadow-sm overflow-hidden">
+                      <div className="h-24 bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+                        <span className="text-3xl opacity-50">📖</span>
+                      </div>
+                      <div className="p-3">
+                        <p className="text-xs font-medium text-foreground line-clamp-2">{c.title}</p>
+                        <span className="text-[10px] text-muted-foreground mt-1 inline-block">{c.category || "课程"}</span>
+                      </div>
+                    </div>
+                  </Link>
+                )) : (
+                  <Link href="/courses" className="flex-shrink-0 w-44">
+                    <div className="bg-card rounded-2xl shadow-sm overflow-hidden">
+                      <div className="h-24 bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+                        <span className="text-3xl opacity-50">📖</span>
+                      </div>
+                      <div className="p-3">
+                        <p className="text-xs font-medium text-foreground line-clamp-2">课程即将上线</p>
+                        <span className="text-[10px] text-muted-foreground mt-1 inline-block">敬请期待</span>
+                      </div>
+                    </div>
+                  </Link>
+                )}
+              </div>
+            </div>
+          </BlurFade>
+
+          {/* 深度阅读 */}
+          <BlurFade delay={0.5}>
+            <div className="mt-8">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-semibold text-foreground">深度阅读</h2>
+                <Link href="/reading" className="text-xs text-primary">查看全部</Link>
+              </div>
+              <div className="space-y-3">
+                {articles.length > 0 ? articles.map((a) => (
+                  <Link key={a.id} href={`/reading/${a.id}`}>
+                    <div className="bg-card rounded-2xl shadow-sm p-4 transition-all hover:shadow-md">
+                      <p className="font-medium text-foreground text-sm">{a.title}</p>
+                      {a.summary && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{a.summary}</p>}
+                      {a.author && <p className="text-xs text-muted-foreground/70 mt-1">{a.author}</p>}
+                    </div>
+                  </Link>
+                )) : (
+                  <div className="bg-card rounded-2xl shadow-sm p-4">
+                    <p className="font-medium text-foreground text-sm">精选文章即将上线</p>
+                    <p className="text-xs text-muted-foreground mt-1">帮你建立 AI 时代的教育认知</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </BlurFade>
+
+          {/* 快捷入口 */}
+          <BlurFade delay={0.6}>
+            <div className="mt-8 grid grid-cols-3 gap-3">
+              <Link href="/booking">
+                <div className="bg-card rounded-2xl shadow-sm p-4 text-center transition-all hover:shadow-md">
+                  <span className="text-2xl">📅</span>
+                  <p className="text-xs font-medium text-foreground mt-2">预约咨询</p>
+                </div>
+              </Link>
+              <Link href="/reports">
+                <div className="bg-card rounded-2xl shadow-sm p-4 text-center transition-all hover:shadow-md">
+                  <span className="text-2xl">🌱</span>
+                  <p className="text-xs font-medium text-foreground mt-2">成长报告</p>
+                </div>
+              </Link>
+              <Link href="/subscribe">
+                <div className="bg-card rounded-2xl shadow-sm p-4 text-center transition-all hover:shadow-md">
+                  <span className="text-2xl">⭐</span>
+                  <p className="text-xs font-medium text-foreground mt-2">订阅套餐</p>
+                </div>
+              </Link>
+            </div>
+          </BlurFade>
+        </div>
       </div>
     </AuthGuard>
   );

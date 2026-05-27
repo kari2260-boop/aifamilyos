@@ -27,6 +27,7 @@ class ChatSendResponse(BaseModel):
     model_used: str
     tokens_input: int
     tokens_output: int
+    remaining_quota: Optional[int] = None
 
     model_config = {"protected_namespaces": ()}
 

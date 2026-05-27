@@ -41,25 +41,25 @@ export default function AdminRisksPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white px-4 py-3 flex items-center gap-3 border-b border-gray-100 sticky top-0 z-10">
-        <button onClick={() => router.back()} className="text-gray-400 text-xl">‹</button>
-        <h1 className="font-semibold text-gray-800">风险提醒</h1>
+    <div className="min-h-screen bg-background">
+      <div className="bg-card px-4 py-3 flex items-center gap-3 border-b border-border sticky top-0 z-10">
+        <button onClick={() => router.back()} className="text-muted-foreground text-xl">‹</button>
+        <h1 className="font-semibold text-foreground">风险提醒</h1>
       </div>
 
       <div className="p-4 space-y-3">
         {risks.map((r) => (
-          <div key={r.id} className={`bg-white rounded-xl p-4 shadow-sm border ${r.handled ? "border-gray-100" : "border-red-200"}`}>
+          <div key={r.id} className={`bg-card rounded-xl p-4 shadow-sm border ${r.handled ? "border-border" : "border-red-200"}`}>
             <div className="flex items-center justify-between">
-              <span className={`text-xs px-2 py-0.5 rounded ${r.risk_level === "high" ? "bg-red-50 text-red-600" : "bg-yellow-50 text-yellow-600"}`}>
+              <span className={`text-xs px-2 py-0.5 rounded ${r.risk_level === "high" ? "bg-destructive/10 text-destructive" : "bg-yellow-50 text-yellow-600"}`}>
                 {r.risk_level === "high" ? "高风险" : "中风险"}
               </span>
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-muted-foreground">
                 {riskTypeNames[r.risk_type] || r.risk_type}
               </span>
             </div>
-            <p className="text-sm text-gray-800 mt-2">{r.content_snapshot}</p>
-            <div className="flex justify-between mt-2 text-xs text-gray-400">
+            <p className="text-sm text-foreground mt-2">{r.content_snapshot}</p>
+            <div className="flex justify-between mt-2 text-xs text-muted-foreground">
               <span>{r.family_name}</span>
               <span>{new Date(r.created_at).toLocaleString("zh-CN")}</span>
             </div>
@@ -74,7 +74,7 @@ export default function AdminRisksPage() {
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="处理备注..."
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                   rows={2}
                 />
                 <div className="flex gap-2">
@@ -86,7 +86,7 @@ export default function AdminRisksPage() {
                   </button>
                   <button
                     onClick={() => setHandlingId(null)}
-                    className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs rounded-lg"
+                    className="px-3 py-1.5 bg-muted text-muted-foreground text-xs rounded-lg"
                   >
                     取消
                   </button>
@@ -95,7 +95,7 @@ export default function AdminRisksPage() {
             ) : (
               <button
                 onClick={() => setHandlingId(r.id)}
-                className="mt-3 text-xs text-blue-500"
+                className="mt-3 text-xs text-primary"
               >
                 处理此风险
               </button>
@@ -103,7 +103,7 @@ export default function AdminRisksPage() {
           </div>
         ))}
         {risks.length === 0 && (
-          <p className="text-center text-gray-300 text-sm mt-10">暂无风险记录</p>
+          <p className="text-center text-muted-foreground/60 text-sm mt-10">暂无风险记录</p>
         )}
       </div>
     </div>

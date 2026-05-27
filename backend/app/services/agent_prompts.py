@@ -1,9 +1,12 @@
 """
 Agent Prompts - 4个教育智能体的系统提示词
-每个Agent有独立的人设、专业领域、回复风格
+优先从数据库读取（后台可编辑），fallback 到硬编码默认值
 """
+from sqlalchemy.orm import Session
+from typing import Optional
 
-AGENT_PROMPTS = {
+# 硬编码默认提示词（数据库为空时使用）
+DEFAULT_PROMPTS = {
     "xuexue": {
         "name": "学学",
         "role": "学习策略师",
@@ -27,7 +30,7 @@ AGENT_PROMPTS = {
 - 每次只聚焦1-2个问题，不要信息过载
 - 鼓励孩子表达自己的想法和感受
 - 如果是家长在咨询，帮助家长理解孩子的视角
-- 回复控制在200字以内，简洁有力""",
+- 回复控制在300-800字之间，内容充实但不啰嗦，简洁有力""",
     },
 
     "chuangchuang": {
@@ -53,7 +56,7 @@ AGENT_PROMPTS = {
 - 给出的项目要有明确的产出物（一个作品、一个实验结果等）
 - 难度适中，让孩子有挑战但不会挫败
 - 鼓励孩子分享和展示自己的创作
-- 回复控制在200字以内，生动有趣""",
+- 回复控制在300-800字之间，生动有趣，给出具体可操作的建议""",
     },
 
     "tantan": {
@@ -79,7 +82,7 @@ AGENT_PROMPTS = {
 - 关注孩子"自然而然"就做得好的事情
 - 帮助家长区分"兴趣"和"天赋"
 - 给出具体的观察建议和培养方向
-- 回复控制在200字以内，专业但易懂""",
+- 回复控制在300-800字之间，专业但易懂，给出有深度的分析""",
     },
 
     "banban": {
@@ -105,7 +108,7 @@ AGENT_PROMPTS = {
 - 区分是孩子在倾诉还是家长在求助，调整回应方式
 - 如果涉及严重心理问题，建议寻求专业帮助
 - 关注家庭系统，不只看单一个体
-- 回复控制在200字以内，温暖有力
+- 回复控制在300-800字之间，温暖有力，给出实用的亲子沟通建议
 
 ## 安全边界
 - 如果检测到自伤、自杀等危险信号，立即提供危机干预信息
@@ -115,9 +118,29 @@ AGENT_PROMPTS = {
 }
 
 
-def get_agent_prompt(agent_type: str) -> str:
-    """获取指定Agent的系统提示词"""
-    agent = AGENT_PROMPTS.get(agent_type)
+def get_agent_prompt(agent_type: str, db: Optional[Session] = None) -> str:
+    """获取指定Agent的系统提示词，优先从DB读取"""
+    if db:
+        from app.models.models import AgentPrompt, AgentExample
+        agent_record = db.query(AgentPrompt).filter(
+            AgentPrompt.agent_type == agent_type,
+            AgentPrompt.is_active == True,
+        ).first()
+        if agent_record:
+            prompt = agent_record.system_prompt
+            # 附加案例
+            examples = db.query(AgentExample).filter(
+                AgentExample.agent_prompt_id == agent_record.id,
+                AgentExample.is_active == True,
+            ).order_by(AgentExample.sort_order).all()
+            if examples:
+                prompt += "\n\n## 参考案例\n以下是一些对话示例，请参考这些案例的风格和深度来回答：\n"
+                for ex in examples:
+                    prompt += f"\n### {ex.title}\n用户：{ex.user_input}\n回复：{ex.assistant_output}\n"
+            return prompt
+
+    # Fallback 到硬编码
+    agent = DEFAULT_PROMPTS.get(agent_type)
     if not agent:
         return "你是一个AI教育助手，请友善地回答用户的问题。"
     return agent["system_prompt"]
@@ -125,7 +148,7 @@ def get_agent_prompt(agent_type: str) -> str:
 
 def get_agent_info(agent_type: str) -> dict:
     """获取Agent的基本信息"""
-    agent = AGENT_PROMPTS.get(agent_type)
+    agent = DEFAULT_PROMPTS.get(agent_type)
     if not agent:
         return {"name": "未知", "role": "助手"}
     return {"name": agent["name"], "role": agent["role"]}

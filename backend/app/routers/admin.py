@@ -4,7 +4,7 @@ Admin Router - 管理后台接口
 """
 from uuid import UUID
 from typing import List
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -12,7 +12,7 @@ from sqlalchemy import func
 from app.database import get_db
 from app.utils.auth import require_admin
 from app.models.models import (
-    User, Family, ChildProfile, Conversation, Message, RiskFlag,
+    User, Family, ChildProfile, Conversation, Message, RiskFlag, UsageLog,
 )
 from app.schemas.admin import (
     AdminStats, AdminFamilyItem, AdminConversationItem,
@@ -75,6 +75,47 @@ def list_families(
             created_at=f.created_at,
         ))
     return result
+
+
+@router.get("/families/{family_id}")
+def get_family_detail(
+    family_id: UUID,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """家庭详情（含孩子信息）"""
+    family = db.query(Family).filter(Family.id == family_id).first()
+    if not family:
+        raise HTTPException(status_code=404, detail="家庭不存在")
+
+    owner = db.query(User).filter(User.id == family.owner_user_id).first()
+    children = db.query(ChildProfile).filter(ChildProfile.family_id == family.id).all()
+    conv_count = db.query(func.count(Conversation.id)).filter(
+        Conversation.family_id == family.id
+    ).scalar() or 0
+
+    return {
+        "id": str(family.id),
+        "family_name": family.family_name,
+        "city": family.city,
+        "membership_level": family.membership_level,
+        "monthly_quota": family.monthly_quota,
+        "owner_phone": owner.phone if owner else "未知",
+        "conversations_count": conv_count,
+        "created_at": family.created_at.isoformat() if family.created_at else None,
+        "children": [
+            {
+                "id": str(c.id),
+                "name": c.name,
+                "age": c.age,
+                "grade": c.grade,
+                "interests": c.interests,
+                "learning_challenges": c.learning_challenges,
+                "parent_expectations": c.parent_expectations,
+            }
+            for c in children
+        ],
+    }
 
 
 @router.get("/conversations", response_model=List[AdminConversationItem])
@@ -185,3 +226,71 @@ def handle_risk(
     db.commit()
 
     return {"status": "ok"}
+
+
+@router.get("/usage/summary")
+def usage_summary(
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """用量总览"""
+    total_tokens_input = db.query(func.coalesce(func.sum(UsageLog.tokens_input), 0)).scalar()
+    total_tokens_output = db.query(func.coalesce(func.sum(UsageLog.tokens_output), 0)).scalar()
+    total_cost = db.query(func.coalesce(func.sum(UsageLog.cost_estimate), 0)).scalar()
+    total_chats = db.query(func.count(UsageLog.id)).filter(UsageLog.action_type == "chat").scalar() or 0
+
+    # 各 Agent 使用占比
+    agent_usage = db.query(
+        UsageLog.agent_type,
+        func.count(UsageLog.id).label("count"),
+    ).filter(
+        UsageLog.agent_type.isnot(None)
+    ).group_by(UsageLog.agent_type).all()
+
+    # 活跃家庭数
+    active_families = db.query(func.count(func.distinct(UsageLog.family_id))).scalar() or 0
+
+    return {
+        "total_tokens_input": total_tokens_input,
+        "total_tokens_output": total_tokens_output,
+        "total_tokens": total_tokens_input + total_tokens_output,
+        "total_cost": round(float(total_cost), 4),
+        "total_chats": total_chats,
+        "active_families": active_families,
+        "agent_usage": [
+            {"agent_type": a[0], "count": a[1]} for a in agent_usage
+        ],
+    }
+
+
+@router.get("/usage/daily")
+def usage_daily(
+    days: int = 30,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """每日对话趋势"""
+    start_date = date.today() - timedelta(days=days)
+
+    daily_data = db.query(
+        func.date(UsageLog.created_at).label("day"),
+        func.count(UsageLog.id).label("count"),
+        func.coalesce(func.sum(UsageLog.tokens_input + UsageLog.tokens_output), 0).label("tokens"),
+    ).filter(
+        func.date(UsageLog.created_at) >= start_date
+    ).group_by(
+        func.date(UsageLog.created_at)
+    ).order_by(
+        func.date(UsageLog.created_at)
+    ).all()
+
+    return {
+        "days": [
+            {
+                "date": str(d[0]),
+                "count": d[1],
+                "tokens": int(d[2]),
+            }
+            for d in daily_data
+        ],
+    }

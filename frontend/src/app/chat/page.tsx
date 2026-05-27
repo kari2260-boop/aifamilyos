@@ -1,42 +1,46 @@
 "use client";
 
 import AuthGuard from "@/components/AuthGuard";
-import BottomNav from "@/components/BottomNav";
 import Link from "next/link";
+import { Card, CardContent } from "@/components/ui/card";
+import { BlurFade } from "@/components/ui/blur-fade";
 
 const agents = [
-  { name: "学学", role: "学习策略师", color: "bg-blue-500", agentType: "xuexue" },
-  { name: "创创", role: "创造引导师", color: "bg-green-500", agentType: "chuangchuang" },
-  { name: "探探", role: "天赋测评师", color: "bg-purple-500", agentType: "tantan" },
-  { name: "伴伴", role: "成长陪伴师", color: "bg-orange-500", agentType: "banban" },
+  { name: "学学", role: "学习策略师", gradient: "from-blue-500 to-indigo-600", icon: "📚", agentType: "xuexue" },
+  { name: "创创", role: "创造引导师", gradient: "from-emerald-500 to-teal-600", icon: "🎨", agentType: "chuangchuang" },
+  { name: "探探", role: "天赋测评师", gradient: "from-violet-500 to-purple-600", icon: "🔮", agentType: "tantan" },
+  { name: "伴伴", role: "成长陪伴师", gradient: "from-amber-500 to-orange-600", icon: "🤝", agentType: "banban" },
 ];
 
 export default function ChatListPage() {
   return (
     <AuthGuard>
-      <div className="min-h-screen bg-gray-50 pb-20">
-        <div className="bg-white px-5 pt-12 pb-4">
-          <h1 className="text-lg font-bold text-gray-800">对话</h1>
+      <div className="min-h-screen bg-background pb-20">
+        <div className="px-5 pt-12 pb-4">
+          <h1 className="text-lg font-bold text-foreground">对话</h1>
+          <p className="text-sm text-muted-foreground mt-1">选择一位 AI 导师开始对话</p>
         </div>
 
-        <div className="px-4 mt-3 space-y-3">
-          {agents.map((agent) => (
-            <Link key={agent.agentType} href={`/chat/${agent.agentType}`}>
-              <div className="bg-white rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 active:scale-[0.98] transition">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${agent.color}`}>
-                  {agent.name[0]}
-                </div>
-                <div>
-                  <h3 className="font-medium text-gray-800">{agent.name}</h3>
-                  <p className="text-xs text-gray-400">{agent.role}</p>
-                </div>
-                <span className="ml-auto text-gray-300 text-xl">›</span>
-              </div>
-            </Link>
+        <div className="px-4 space-y-3">
+          {agents.map((agent, i) => (
+            <BlurFade key={agent.agentType} delay={0.1 + i * 0.06}>
+              <Link href={`/chat/${agent.agentType}`}>
+                <Card className="border-0 shadow-md hover:shadow-lg transition-all duration-300 active:scale-[0.98]">
+                  <CardContent className="p-4 flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${agent.gradient} flex items-center justify-center text-xl shadow-sm`}>
+                      {agent.icon}
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-foreground">{agent.name}</h3>
+                      <p className="text-sm text-muted-foreground">{agent.role}</p>
+                    </div>
+                    <span className="text-muted-foreground/40 text-xl">›</span>
+                  </CardContent>
+                </Card>
+              </Link>
+            </BlurFade>
           ))}
         </div>
-
-        <BottomNav />
       </div>
     </AuthGuard>
   );

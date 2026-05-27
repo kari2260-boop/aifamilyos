@@ -24,11 +24,11 @@ export default function AdminConversationDetailPage() {
   }, [id, router]);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <div className="bg-white px-4 py-3 flex items-center gap-3 border-b border-gray-100 sticky top-0 z-10">
-        <button onClick={() => router.back()} className="text-gray-400 text-xl">‹</button>
-        <h1 className="font-semibold text-gray-800">对话详情</h1>
-        <span className="text-xs text-gray-400 ml-auto">{messages.length} 条消息</span>
+    <div className="min-h-screen bg-background flex flex-col">
+      <div className="bg-card px-4 py-3 flex items-center gap-3 border-b border-border sticky top-0 z-10">
+        <button onClick={() => router.back()} className="text-muted-foreground text-xl">‹</button>
+        <h1 className="font-semibold text-foreground">对话详情</h1>
+        <span className="text-xs text-muted-foreground ml-auto">{messages.length} 条消息</span>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -40,8 +40,8 @@ export default function AdminConversationDetailPage() {
             <div
               className={`max-w-[85%] px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap ${
                 msg.role === "user"
-                  ? "bg-blue-500 text-white rounded-br-md"
-                  : "bg-white text-gray-800 border border-gray-100 rounded-bl-md shadow-sm"
+                  ? "bg-primary text-white rounded-br-md"
+                  : "bg-card text-foreground border border-border rounded-bl-md shadow-sm"
               }`}
             >
               {msg.content}

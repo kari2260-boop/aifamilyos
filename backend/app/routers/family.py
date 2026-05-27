@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.database import get_db
 from app.models import User, Family, ChildProfile
+from app.models.models import GrowthTag
 from app.schemas.family import (
     FamilyCreate, FamilyUpdate, FamilyResponse, FamilyDetailResponse,
     ChildCreate, ChildUpdate, ChildResponse,
@@ -102,3 +103,58 @@ def update_child(child_id: str, data: ChildUpdate, db: Session = Depends(get_db)
     db.commit()
     db.refresh(child)
     return child
+
+
+@router.get("/children/{child_id}/tags")
+def get_child_tags(
+    child_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取孩子的成长画像标签"""
+    family = db.query(Family).filter(Family.owner_user_id == current_user.id).first()
+    if not family:
+        raise HTTPException(status_code=404, detail="家庭不存在")
+
+    child = db.query(ChildProfile).filter(
+        ChildProfile.id == child_id, ChildProfile.family_id == family.id
+    ).first()
+    if not child:
+        raise HTTPException(status_code=404, detail="孩子不存在")
+
+    tags = db.query(GrowthTag).filter(GrowthTag.child_id == child_id).all()
+    return [
+        {
+            "id": str(t.id),
+            "tag_name": t.tag_name,
+            "tag_category": t.tag_category,
+            "confidence": t.confidence,
+            "source": t.source,
+        }
+        for t in tags
+    ]
+
+
+@router.post("/children/{child_id}/tags/refresh")
+async def refresh_child_tags(
+    child_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """重新分析孩子的成长标签"""
+    family = db.query(Family).filter(Family.owner_user_id == current_user.id).first()
+    if not family:
+        raise HTTPException(status_code=404, detail="家庭不存在")
+
+    child = db.query(ChildProfile).filter(
+        ChildProfile.id == child_id, ChildProfile.family_id == family.id
+    ).first()
+    if not child:
+        raise HTTPException(status_code=404, detail="孩子不存在")
+
+    from app.services.tag_service import analyze_child_tags
+    try:
+        tags = await analyze_child_tags(child_id, db)
+        return {"tags": tags}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

@@ -22,3 +22,15 @@ Thumbs.db
 
 # Docker
 pgdata/
+
+# Uploads (videos/images)
+uploads/
+
+# Knowledge import source files (already in database)
+backend/knowledge_import/
+backend/knowledge_import_batch2/
+
+# Temp/build artifacts
+*.tar.gz
+*.csv
+frontend/Dockerfile.prod

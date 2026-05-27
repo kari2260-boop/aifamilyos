@@ -14,7 +14,7 @@ TIMEOUT = 60.0  # 秒
 async def chat_completion(
     messages: List[Dict[str, str]],
     temperature: float = 0.3,
-    max_tokens: int = 2000,
+    max_tokens: int = 4000,
 ) -> Tuple[str, int, int, str]:
     """
     调用大模型API生成回复

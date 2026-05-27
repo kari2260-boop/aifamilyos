@@ -24,7 +24,7 @@ from app.models.models import KnowledgeDoc, KnowledgeChunk
 from app.services.text_splitter import split_text
 from app.services.embedding_service import get_embeddings
 
-VALID_CATEGORIES = {"learning", "project", "talent", "parenting"}
+VALID_CATEGORIES = {"learning", "project", "talent", "parenting", "global", "product"}
 SUPPORTED_EXTENSIONS = {".txt", ".md"}
 BATCH_SIZE = 10  # embedding 批量大小
 
