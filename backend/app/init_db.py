@@ -16,6 +16,7 @@ def init_db():
     with engine.connect() as conn:
         # 启用 pgvector 扩展
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
         conn.commit()
 
     # 创建所有表

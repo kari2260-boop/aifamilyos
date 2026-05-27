@@ -27,6 +27,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     bind = op.get_bind()
     bind.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+    bind.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
     Base.metadata.create_all(bind=bind)
 
 

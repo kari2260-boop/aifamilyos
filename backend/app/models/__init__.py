@@ -21,6 +21,17 @@ from app.models.models import (
     AssessmentRecord,
     AssessmentReport,
 )
+from app.models.course import (
+    Course,
+    CourseCategory,
+    CourseSeries,
+    CourseModule,
+    LearningPath,
+    LearningPathNode,
+    UserCourseProgress,
+)
+from app.models.article import Article
+from app.models.resource import Resource
 
 __all__ = [
     "User",
@@ -44,4 +55,13 @@ __all__ = [
     "AssessmentTemplate",
     "AssessmentRecord",
     "AssessmentReport",
+    "Course",
+    "CourseCategory",
+    "CourseSeries",
+    "CourseModule",
+    "LearningPath",
+    "LearningPathNode",
+    "UserCourseProgress",
+    "Article",
+    "Resource",
 ]

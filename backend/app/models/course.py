@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from sqlalchemy import (
     Column, String, Text, Integer, Boolean,
-    DateTime, ForeignKey, Enum as SAEnum
+    DateTime, ForeignKey, Enum as SAEnum, text
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
@@ -37,6 +37,10 @@ class Course(Base):
     content_markdown = Column(Text, nullable=True)  # 长文课程内容
     tags = Column(JSONB, default=list)
     feishu_doc_id = Column(String(100), nullable=True)
+    series_id = Column(UUID(as_uuid=True), ForeignKey("course_series.id"), nullable=True, index=True)
+    module_id = Column(UUID(as_uuid=True), ForeignKey("course_modules.id"), nullable=True, index=True)
+    lesson_order = Column(Integer, default=0)
+    duration_minutes = Column(Integer, nullable=True)
     is_published = Column(Boolean, default=False)
     is_free = Column(Boolean, default=False)  # 是否免费可见
     recommended_by = Column(String(50), nullable=True)  # "K博士推荐" / "Bing Dad 推荐"
@@ -46,6 +50,8 @@ class Course(Base):
 
     category = relationship("CourseCategory", back_populates="courses")
     progress_records = relationship("UserCourseProgress", back_populates="course")
+    series = relationship("CourseSeries", back_populates="courses")
+    module = relationship("CourseModule", back_populates="courses")
 
 
 class LearningPath(Base):
@@ -59,6 +65,37 @@ class LearningPath(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     nodes = relationship("LearningPathNode", back_populates="path", order_by="LearningPathNode.node_order")
+
+
+class CourseSeries(Base):
+    __tablename__ = "course_series"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, server_default=text("gen_random_uuid()"))
+    title = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    cover_url = Column(String(500), nullable=True)
+    sort_order = Column(Integer, default=0)
+    is_published = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    modules = relationship("CourseModule", back_populates="series")
+    courses = relationship("Course", back_populates="series")
+
+
+class CourseModule(Base):
+    __tablename__ = "course_modules"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, server_default=text("gen_random_uuid()"))
+    series_id = Column(UUID(as_uuid=True), ForeignKey("course_series.id"), nullable=False, index=True)
+    title = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    series = relationship("CourseSeries", back_populates="modules")
+    courses = relationship("Course", back_populates="module")
 
 
 class LearningPathNode(Base):

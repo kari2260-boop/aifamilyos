@@ -134,8 +134,6 @@ async def search_knowledge(
             LIMIT :top_k
         """)
         results = db.execute(sql, {"top_k": req.top_k}).fetchall()
-        """)
-        results = db.execute(sql, {"embedding": embedding_str, "top_k": req.top_k}).fetchall()
 
     return KnowledgeSearchResponse(
         results=[

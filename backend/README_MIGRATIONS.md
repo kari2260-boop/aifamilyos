@@ -32,15 +32,24 @@ alembic upgrade head
 
 1. Back up the database.
 2. Pull the target Git commit.
-3. Run:
+3. Run migrations manually if you are not rebuilding the backend container:
 
 ```bash
 cd backend
 alembic upgrade head
 ```
 
-4. Restart the backend/frontend services.
+The backend Docker image also runs `alembic upgrade head` before starting Uvicorn, so normal Docker deploys apply migrations automatically.
+
+4. Restart or redeploy the backend/frontend services.
 5. Run a smoke test: login, admin page, courses, experts, assessment, AI chat.
+
+## Docker usage
+
+```bash
+docker compose exec backend alembic current
+docker compose exec backend alembic upgrade head
+```
 
 ## Check current database revision
 
