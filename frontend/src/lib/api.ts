@@ -17,6 +17,7 @@ export function getApiBase(): string {
 }
 
 const API_BASE = getApiBase();
+const REQUEST_TIMEOUT_MS = 12000;
 
 class ApiClient {
   getBaseUrl(): string {
@@ -30,6 +31,8 @@ class ApiClient {
 
   async request(path: string, options: RequestInit = {}) {
     const token = this.getToken();
+    const controller = new AbortController();
+    const timeoutId = globalThis.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       ...(options.headers as Record<string, string>),
@@ -38,10 +41,21 @@ class ApiClient {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    const res = await fetch(`${API_BASE}${path}`, {
-      ...options,
-      headers,
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}${path}`, {
+        ...options,
+        headers,
+        signal: options.signal || controller.signal,
+      });
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        throw new Error("请求超时，请检查网络或稍后重试");
+      }
+      throw err;
+    } finally {
+      globalThis.clearTimeout(timeoutId);
+    }
 
     if (!res.ok) {
       const error = await res.json().catch(() => ({ detail: "请求失败" }));

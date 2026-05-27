@@ -8,8 +8,12 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
+    setReady(false);
+    setError("");
+
     if (!api.isLoggedIn()) {
       router.push("/login");
       return;
@@ -22,25 +26,47 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     }
 
     // 检查是否有家庭档案，没有则跳转 onboarding
-    api.getMe().then((user) => {
-      if (user.role === "admin") {
-        setReady(true);
-        return;
+    let cancelled = false;
+
+    async function checkAuth() {
+      try {
+        const user = await api.getMe();
+        if (cancelled) return;
+
+        if (user.role === "admin") {
+          setReady(true);
+          return;
+        }
+
+        try {
+          await api.getMyFamily();
+          if (!cancelled) setReady(true);
+        } catch {
+          if (!cancelled) router.push("/onboarding");
+        }
+      } catch (err: unknown) {
+        api.logout();
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "登录状态已失效，请重新登录");
+          router.push("/login");
+        }
       }
-      return api.getMyFamily().then(() => {
-        setReady(true);
-      }).catch(() => {
-        router.push("/onboarding");
-      });
-    }).catch(() => {
-      router.push("/login");
-    });
+    }
+
+    checkAuth();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router, pathname]);
 
   if (!ready) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <p className="text-gray-400">加载中...</p>
+        <div className="text-center px-6">
+          <p className="text-gray-400">加载中...</p>
+          {error && <p className="text-xs text-gray-400 mt-2">{error}</p>}
+        </div>
       </div>
     );
   }
