@@ -1,4 +1,15 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+// API地址自动推断：同域名的8000端口，或环境变量指定
+function getApiBase(): string {
+  if (typeof window === "undefined") {
+    // 服务端渲染时用环境变量或默认值
+    return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+  }
+  // 浏览器端：自动用当前域名的8000端口
+  const host = window.location.hostname;
+  return `http://${host}:8000/api`;
+}
+
+const API_BASE = getApiBase();
 
 class ApiClient {
   private getToken(): string | null {
