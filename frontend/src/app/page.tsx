@@ -89,13 +89,13 @@ export default function Home() {
           {/* 最新课程 */}
           <BlurFade delay={0.35}>
             <Link href="/assessment">
-              <div className="mt-6 bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-100 rounded-2xl p-4 flex items-center gap-3 hover:shadow-md active:scale-[0.98] transition-all">
+              <div className="mt-6 bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-2xl p-4 flex items-center gap-3 hover:shadow-md active:scale-[0.98] transition-all">
                 <div className="text-2xl">📋</div>
                 <div className="flex-1">
                   <h3 className="font-semibold text-foreground text-sm">成长测评</h3>
                   <p className="text-xs text-muted-foreground mt-0.5">了解孩子的学习风格、性格和兴趣方向</p>
                 </div>
-                <span className="text-xs text-violet-600 bg-violet-100 px-2 py-1 rounded-full">去测评</span>
+                <span className="text-xs text-primary bg-primary/10 px-2 py-1 rounded-full">去测评</span>
               </div>
             </Link>
           </BlurFade>
