@@ -4,7 +4,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from app.database import get_db
 from app.models import User
-from app.schemas.auth import UserRegister, UserLogin, TokenResponse, UserResponse
+from app.schemas.auth import UserRegister, UserLogin, PasswordResetRequest, TokenResponse, UserResponse
 from app.utils.auth import hash_password, verify_password, create_access_token, get_current_user
 
 router = APIRouter(prefix="/auth", tags=["认证"])
@@ -40,6 +40,20 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.phone == data.phone).first()
     if not user or not verify_password(data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="手机号或密码错误")
+
+    token = create_access_token(str(user.id))
+    return TokenResponse(access_token=token)
+
+
+@router.post("/reset-password", response_model=TokenResponse)
+@limiter.limit("3/minute")
+def reset_password(request: Request, data: PasswordResetRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.phone == data.phone).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="该手机号未注册")
+
+    user.password_hash = hash_password(data.new_password)
+    db.commit()
 
     token = create_access_token(str(user.id))
     return TokenResponse(access_token=token)

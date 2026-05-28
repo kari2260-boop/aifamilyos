@@ -66,7 +66,7 @@ export default function AdminAnalyticsPage() {
   return (
     <AuthGuard>
       <div className="min-h-screen bg-background pb-20">
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 px-5 pt-12 pb-8 rounded-b-[2rem]">
+        <div className="bg-gradient-to-br from-amber-500 via-amber-600 to-orange-500 px-5 pt-12 pb-8 rounded-b-[2rem]">
           <h1 className="text-lg font-bold text-white">数据分析</h1>
           <p className="text-white/60 text-xs mt-1">知识有效性 · Agent性能 · 知识缺口 · 用户行为</p>
         </div>

@@ -28,6 +28,7 @@ export default function CourseDetailPage() {
   const [showPaywall, setShowPaywall] = useState(false);
 
   const isLocked = course?.locked === true || course?.is_free === false;
+  const canOpenExternalVideo = course?.content_type === "video" && !!course?.external_url;
 
   useEffect(() => {
     if (params.id) {
@@ -51,6 +52,15 @@ export default function CourseDetailPage() {
   async function handleStartLearning() {
     if (!course) return;
 
+    if (course.content_type === "video" && course.external_url) {
+      window.open(course.external_url, "_blank", "noopener,noreferrer");
+      void api.updateCourseProgress(course.id, {
+        status: "in_progress",
+        progress_percent: 10,
+      }).catch(() => {});
+      return;
+    }
+
     // 更新进度为进行中
     try {
       await api.updateCourseProgress(course.id, {
@@ -58,10 +68,6 @@ export default function CourseDetailPage() {
         progress_percent: 10,
       });
     } catch {}
-
-    if (course.content_type === "video" && course.external_url) {
-      window.open(course.external_url, "_blank");
-    }
   }
 
   if (loading) {
@@ -152,10 +158,10 @@ export default function CourseDetailPage() {
         {!(course.content_type === "video" && (course.external_url?.startsWith("/api/static/") || course.external_url?.startsWith("/api/files/"))) && (
           <button
             onClick={handleStartLearning}
-            disabled={isLocked}
+            disabled={isLocked && !canOpenExternalVideo}
             className="w-full mt-8 bg-primary text-primary-foreground py-3 rounded-2xl font-medium text-center transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            {isLocked ? "会员专属内容" : course.content_type === "video" ? "前往观看" : "开始阅读"}
+            {isLocked && !canOpenExternalVideo ? "会员专属内容" : course.content_type === "video" ? "前往观看" : "开始阅读"}
           </button>
         )}
 

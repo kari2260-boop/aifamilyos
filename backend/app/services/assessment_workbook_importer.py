@@ -143,6 +143,14 @@ def _standard_options_4() -> list[dict[str, Any]]:
     return [{"label": label, "value": str(i + 1), "score": i + 1} for i, label in enumerate(labels)]
 
 
+def _semantic_scale_labels(scores: list[int]) -> list[str]:
+    if scores == [1, 2, 3, 4, 5]:
+        return ["完全不符合", "不太符合", "基本符合", "比较符合", "完全符合"]
+    if scores == [1, 2, 3, 4]:
+        return ["完全不符合", "不太符合", "比较符合", "完全符合"]
+    return [str(score) for score in scores]
+
+
 def _question_from_scale(
     question_text: str,
     labels: list[str],
@@ -151,9 +159,13 @@ def _question_from_scale(
     question_type: str = "single",
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    normalized_labels = list(labels)
+    if scores == [1, 2, 3, 4, 5]:
+        if not any(_clean(label) and not re.fullmatch(r"\d+", _clean(label)) for label in normalized_labels):
+            normalized_labels = _semantic_scale_labels(scores)
     options = []
     for idx, score in enumerate(scores):
-        label = labels[idx] if idx < len(labels) else str(score)
+        label = normalized_labels[idx] if idx < len(normalized_labels) else str(score)
         option = {
             "label": _clean(label),
             "value": str(score),
@@ -292,8 +304,13 @@ def _parse_scale_sheet(rows: list[dict[str, str]], title: str, category: str, so
         scores = _extract_cell_ints(row)
         if scores and len(scores) >= 2:
             labels = current_labels or [str(s) for s in scores]
+            if len(scores) == 5 and labels and all(re.fullmatch(r"\d+", _clean(label)) for label in labels):
+                labels = _semantic_scale_labels(scores)
+            question_text = first
+            if "社会环境测评" in title and len(questions) == 1:
+                question_text = "我会有意识判断网上和 AI 给的信息是否可能有误或不完整"
             dimension = current_dimension or None
-            questions.append(_question_from_scale(first, labels, scores, dimension))
+            questions.append(_question_from_scale(question_text, labels, scores, dimension))
             continue
 
         # 家长测评总表有“一个单元格里塞了多道题”，这里不直接处理
@@ -572,104 +589,198 @@ def _parse_binary_sheet(
     }
 
 
-def parse_learning_workbook(path: str | Path) -> list[dict[str, Any]]:
+ALLOWED_ASSESSMENT_BUCKETS = {"learning", "creativity", "talent", "parent_child"}
+
+BUCKET_SPECS: dict[str, dict[str, Any]] = {
+    "learning": {
+        "label": "学习力",
+        "title": "学习力测评（精简版）",
+        "category": "learning",
+        "target_age_min": 8,
+        "target_age_max": 18,
+        "sheet_parsers": {
+            "A-1认知模型": _parse_scale_sheet,
+            "A-2记忆力": _parse_scale_sheet,
+            "A-3个人学习方式": _parse_scale_sheet,
+            "B-1目标管理": _parse_scale_sheet,
+            "B-2执行力": _parse_scale_sheet,
+            "B-3专注力": _parse_scale_sheet,
+            "C-1学习意愿": _parse_scale_sheet,
+            "C-2内驱力测评": _parse_scale_sheet,
+            "D-1家庭养育环境测评": _parse_scale_sheet,
+            "D-2学校环境测评": _parse_scale_sheet,
+            "D-3社会环境测评": _parse_scale_sheet,
+        },
+    },
+    "creativity": {
+        "label": "创造力和综合能力",
+        "title": "创造力和综合能力测评",
+        "category": "creativity",
+        "target_age_min": 8,
+        "target_age_max": 18,
+        "sheet_parsers": {
+            "G-1.1DISC测试（学生版）": _parse_disc_grid_sheet,
+            "G-1.2DISC测试（成人版）": _parse_disc_grid_sheet,
+            "G-2MBTI职业性格测试（学生版）": _parse_allocation_sheet,
+        },
+    },
+    "talent": {
+        "label": "个人天赋",
+        "title": "孩子的天赋测评",
+        "category": "talent",
+        "target_age_min": 8,
+        "target_age_max": 18,
+        "sheet_parsers": {
+            "G-3霍兰德职业兴趣测试（学生版）": _parse_binary_sheet,
+            "G-4职业锚测试（学生版）": _parse_binary_sheet,
+        },
+    },
+    "parent_child": {
+        "label": "亲子关系",
+        "title": "亲子关系测评",
+        "category": "parent_child",
+        "target_age_min": 8,
+        "target_age_max": 18,
+        "sheet_parsers": {
+            "E-家长测评（总表）": _parse_parent_summary_sheet,
+        },
+    },
+}
+
+
+def _clean_preview_text(text: str | None) -> str:
+    return _clean(text).replace("\n", " ").strip()
+
+
+def _build_bucket_template(path: str | Path, bucket: str) -> dict[str, Any]:
+    bucket = (bucket or "learning").strip()
+    if bucket not in ALLOWED_ASSESSMENT_BUCKETS:
+        raise ValueError(f"不支持的测评类别: {bucket}")
+
+    spec = BUCKET_SPECS[bucket]
     reader = XlsxWorkbookReader(path)
     try:
-        templates: list[dict[str, Any]] = []
-        sheet_names = list(reader._sheet_map.keys())
+        questions: list[dict[str, Any]] = []
+        sections: list[dict[str, Any]] = []
+        description_parts: list[str] = []
+        used_sheets: list[str] = []
+        all_sheet_names = list(reader._sheet_map.keys())
 
-        def add_template(sheet_name: str, title: str, category: str, parser, sort_order: int):
-            rows = reader.sheet_rows(sheet_name)
-            tpl = parser(rows, title, category, sort_order)
-            tpl["sort_order"] = sort_order
-            tpl["source_sheet"] = sheet_name
-            templates.append(tpl)
-
-        mapping = [
-            ("A-1认知模型", "A-1 认知模型", "learning_style", _parse_scale_sheet),
-            ("A-2记忆力", "A-2 记忆力", "learning_style", _parse_scale_sheet),
-            ("A-3个人学习方式", "A-3 个人学习方式", "personality", _parse_scale_sheet),
-            ("B-1目标管理", "B-1 目标管理", "learning_system", _parse_scale_sheet),
-            ("B-2执行力", "B-2 执行力", "learning_system", _parse_scale_sheet),
-            ("B-3专注力", "B-3 专注力", "learning_system", _parse_scale_sheet),
-            ("C-1学习意愿", "C-1 学习意愿", "learning_system", _parse_scale_sheet),
-            ("C-2内驱力测评", "C-2 内驱力测评", "learning_system", _parse_scale_sheet),
-            ("D-1家庭养育环境测评", "D-1 家庭养育环境测评", "learning_system", _parse_scale_sheet),
-            ("D-2学校环境测评", "D-2 学校环境测评", "learning_system", _parse_scale_sheet),
-            ("D-3社会环境测评", "D-3 社会环境测评", "learning_system", _parse_scale_sheet),
-            ("E-家长测评（总表）", "E- 家长测评（总表）", "learning_system", _parse_parent_summary_sheet),
-            ("G-1.1DISC测试（学生版）", "G-1.1 DISC 测试（学生版）", "personality", _parse_disc_grid_sheet),
-            ("G-1.2DISC测试（成人版）", "G-1.2 DISC 测试（成人版）", "personality", _parse_disc_grid_sheet),
-            ("G-2MBTI职业性格测试（学生版）", "G-2 MBTI 职业性格测试（学生版）", "personality", _parse_allocation_sheet),
-            ("G-3霍兰德职业兴趣测试（学生版）", "G-3 霍兰德职业兴趣测试（学生版）", "subject_interest", _parse_binary_sheet),
-            ("G-4职业锚测试（学生版）", "G-4 职业锚测试（学生版）", "subject_interest", _parse_binary_sheet),
-            ("G-5焦虑自评量表", "G-5 焦虑自评量表", "mental_health", _parse_scale_sheet),
-            ("G-6抑郁自评量表", "G-6 抑郁自评量表", "mental_health", _parse_scale_sheet),
-            ("G-7SCL-90测定", "G-7 SCL-90 测定", "mental_health", _parse_scale_sheet),
-        ]
-
-        for idx, (sheet_name, title, category, parser) in enumerate(mapping, start=1):
-            if sheet_name not in sheet_names:
+        for sheet_name, parser in spec["sheet_parsers"].items():
+            if sheet_name not in reader._sheet_map:
                 continue
-            add_template(sheet_name, title, category, parser, idx)
+            rows = reader.sheet_rows(sheet_name)
+            parsed = parser(rows, sheet_name, spec["category"], len(used_sheets) + 1)
+            section_questions = parsed.get("questions_json", []) or []
+            if bucket == "learning":
+                section_questions = section_questions[:3]
+            for q in section_questions:
+                q["source_sheet"] = sheet_name
+                q["assessment_bucket"] = bucket
+            questions.extend(section_questions)
+            used_sheets.append(sheet_name)
+            if parsed.get("description"):
+                description_parts.append(str(parsed["description"]))
+            sections.append({
+                "sheet_name": sheet_name,
+                "question_count": len(section_questions),
+                "sample_questions": [
+                    _clean_preview_text(q.get("question", ""))
+                    for q in section_questions[:3]
+                ],
+            })
 
-        return templates
+        if not questions:
+            raise ValueError(f"当前 Excel 中没有找到可导入到【{spec['label']}】的题目")
+
+        excluded_sheets = [sheet for sheet in all_sheet_names if sheet not in used_sheets]
+        description = "\n".join([
+            f"{spec['label']}测评，导入后即可在用户端作答。",
+            *description_parts[:2],
+        ]).strip()
+
+        return {
+            "bucket": bucket,
+            "title": spec["title"],
+            "category": spec["category"],
+            "description": description or None,
+            "target_age_min": spec["target_age_min"],
+            "target_age_max": spec["target_age_max"],
+            "questions_json": questions,
+            "sections": sections,
+            "included_sheets": used_sheets,
+            "excluded_sheets": excluded_sheets,
+            "sheet_count": len(used_sheets),
+            "question_count": len(questions),
+        }
     finally:
         reader.close()
 
 
-def upsert_templates_from_workbook(db: Session, path: str | Path) -> dict[str, Any]:
-    templates = parse_learning_workbook(path)
-    created = 0
-    updated = 0
-    items: list[dict[str, Any]] = []
+def build_assessment_workbook_preview(path: str | Path, bucket: str) -> dict[str, Any]:
+    return _build_bucket_template(path, bucket)
 
-    for tpl in templates:
-        title = tpl["title"]
-        category = tpl["category"]
-        existing = db.query(AssessmentTemplate).filter(
-            AssessmentTemplate.title == title,
-            AssessmentTemplate.category == category,
-        ).first()
 
-        if existing:
-            existing.description = tpl.get("description")
-            existing.target_age_min = tpl.get("target_age_min", 8)
-            existing.target_age_max = tpl.get("target_age_max", 18)
-            existing.questions_json = tpl.get("questions_json", [])
-            existing.sort_order = tpl.get("sort_order", 0)
-            updated += 1
-            template_id = str(existing.id)
-        else:
-            existing = AssessmentTemplate(
-                title=title,
-                category=category,
-                description=tpl.get("description"),
-                target_age_min=tpl.get("target_age_min", 8),
-                target_age_max=tpl.get("target_age_max", 18),
-                questions_json=tpl.get("questions_json", []),
-                sort_order=tpl.get("sort_order", 0),
-            )
-            db.add(existing)
-            db.flush()
-            created += 1
-            template_id = str(existing.id)
+def parse_learning_workbook(path: str | Path) -> list[dict[str, Any]]:
+    """向后兼容：默认按学习力类别解析。"""
+    return [build_assessment_workbook_preview(path, "learning")]
 
-        items.append(
-            {
-                "id": template_id,
-                "title": title,
-                "category": category,
-                "question_count": len(tpl.get("questions_json", [])),
-                "source_sheet": tpl.get("source_sheet"),
-            }
+
+def upsert_templates_from_workbook(db: Session, path: str | Path, bucket: str = "learning") -> dict[str, Any]:
+    template = _build_bucket_template(path, bucket)
+    title = template["title"]
+    category = template["category"]
+    query = db.query(AssessmentTemplate).filter(AssessmentTemplate.category == category)
+    if bucket != "learning":
+        query = query.filter(AssessmentTemplate.title == title)
+    existing = query.order_by(AssessmentTemplate.sort_order.asc(), AssessmentTemplate.created_at.desc()).first()
+
+    if existing:
+        existing.title = title
+        existing.description = template.get("description")
+        existing.target_age_min = template.get("target_age_min", 8)
+        existing.target_age_max = template.get("target_age_max", 18)
+        existing.questions_json = template.get("questions_json", [])
+        existing.is_active = True
+        existing.sort_order = 0
+        updated = 1
+        created = 0
+        template_id = str(existing.id)
+    else:
+        existing = AssessmentTemplate(
+            title=title,
+            category=category,
+            description=template.get("description"),
+            target_age_min=template.get("target_age_min", 8),
+            target_age_max=template.get("target_age_max", 18),
+            questions_json=template.get("questions_json", []),
+            is_active=True,
+            sort_order=0,
         )
+        db.add(existing)
+        db.flush()
+        created = 1
+        updated = 0
+        template_id = str(existing.id)
 
     db.commit()
     return {
         "created": created,
         "updated": updated,
-        "total": len(templates),
-        "templates": items,
+        "total": 1,
+        "bucket": bucket,
+        "templates": [
+            {
+                "id": template_id,
+                "title": title,
+                "category": category,
+                "question_count": len(template.get("questions_json", [])),
+                "source_sheets": template.get("included_sheets", []),
+            }
+        ],
+        "sections": template.get("sections", []),
+        "included_sheets": template.get("included_sheets", []),
+        "excluded_sheets": template.get("excluded_sheets", []),
+        "question_count": len(template.get("questions_json", [])),
+        "template": template,
     }
-

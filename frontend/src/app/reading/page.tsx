@@ -77,9 +77,6 @@ export default function ReadingPage() {
             {articles.map((article) => (
               <Link key={article.id} href={`/reading/${article.id}`}>
                 <div className="bg-card rounded-2xl shadow-sm overflow-hidden transition-all hover:shadow-md relative">
-                  {article.is_free === false && (
-                    <span className="absolute top-3 right-3 z-10 text-base">🔒</span>
-                  )}
                   {article.cover_url && (
                     <img
                       src={article.cover_url}

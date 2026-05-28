@@ -19,6 +19,28 @@ export function getApiBase(): string {
 const API_BASE = getApiBase();
 const REQUEST_TIMEOUT_MS = 12000;
 
+function formatApiError(detail: unknown): string {
+  if (!detail) return "请求失败";
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object") {
+          const maybe = item as Record<string, unknown>;
+          return String(maybe.msg || maybe.message || JSON.stringify(item));
+        }
+        return String(item);
+      })
+      .join("；");
+  }
+  if (typeof detail === "object") {
+    const obj = detail as Record<string, unknown>;
+    return String(obj.detail || obj.message || JSON.stringify(detail));
+  }
+  return String(detail);
+}
+
 class ApiClient {
   getBaseUrl(): string {
     return API_BASE;
@@ -59,7 +81,7 @@ class ApiClient {
 
     if (!res.ok) {
       const error = await res.json().catch(() => ({ detail: "请求失败" }));
-      throw new Error(error.detail || `HTTP ${res.status}`);
+      throw new Error(formatApiError(error.detail || error.message || error));
     }
 
     return res.json();
@@ -79,6 +101,15 @@ class ApiClient {
     const data = await this.request("/auth/login", {
       method: "POST",
       body: JSON.stringify({ phone, password }),
+    });
+    localStorage.setItem("token", data.access_token);
+    return data;
+  }
+
+  async resetPassword(phone: string, newPassword: string) {
+    const data = await this.request("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ phone, new_password: newPassword }),
     });
     localStorage.setItem("token", data.access_token);
     return data;
@@ -575,6 +606,10 @@ class ApiClient {
     return this.request("/assessments/admin/records");
   }
 
+  async adminGetAssessmentReport(reportId: string) {
+    return this.request(`/assessments/admin/reports/${reportId}`);
+  }
+
   async adminReviewReport(reportId: string, data: { consultant_notes?: string; final_content_json?: Record<string, unknown>; action: string }) {
     return this.request(`/assessments/admin/reports/${reportId}`, {
       method: "PUT",
@@ -582,10 +617,30 @@ class ApiClient {
     });
   }
 
-  async adminImportAssessmentWorkbook(file: File) {
+  async adminPreviewAssessmentWorkbook(file: File, bucket: string) {
     const token = this.getToken();
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("bucket", bucket);
+
+    const res = await fetch(`${API_BASE}/assessments/admin/templates/preview-xlsx`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: "预览失败" }));
+      throw new Error(error.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async adminImportAssessmentWorkbook(file: File, bucket: string) {
+    const token = this.getToken();
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("bucket", bucket);
 
     const res = await fetch(`${API_BASE}/assessments/admin/templates/import-xlsx`, {
       method: "POST",

@@ -8,7 +8,7 @@ import { BlurFade } from "@/components/ui/blur-fade";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [isRegister, setIsRegister] = useState(false);
+  const [mode, setMode] = useState<"login" | "register" | "reset">("login");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -20,8 +20,10 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      if (isRegister) {
+      if (mode === "register") {
         await api.register(phone, password);
+      } else if (mode === "reset") {
+        await api.resetPassword(phone, password);
       } else {
         await api.login(phone, password);
       }
@@ -51,7 +53,7 @@ export default function LoginPage() {
             <CardContent className="p-6">
               <form onSubmit={handleSubmit} className="space-y-4">
                 <h2 className="text-lg font-semibold text-center text-foreground">
-                  {isRegister ? "注册账号" : "登录"}
+                  {mode === "register" ? "注册账号" : mode === "reset" ? "重置密码" : "登录"}
                 </h2>
 
                 {error && (
@@ -73,12 +75,12 @@ export default function LoginPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm text-muted-foreground mb-1.5">密码</label>
+                  <label className="block text-sm text-muted-foreground mb-1.5">{mode === "reset" ? "新密码" : "密码"}</label>
                   <input
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="请输入密码"
+                    placeholder={mode === "reset" ? "请输入新密码" : "请输入密码"}
                     className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition"
                     required
                   />
@@ -89,19 +91,36 @@ export default function LoginPage() {
                   disabled={loading}
                   className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-xl font-medium hover:opacity-90 disabled:opacity-50 transition shadow-md shadow-orange-200"
                 >
-                  {loading ? "处理中..." : isRegister ? "注册" : "登录"}
+                  {loading ? "处理中..." : mode === "register" ? "注册" : mode === "reset" ? "重置密码" : "登录"}
                 </button>
 
-                <p className="text-center text-sm text-muted-foreground">
-                  {isRegister ? "已有账号？" : "没有账号？"}
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
                   <button
                     type="button"
-                    onClick={() => setIsRegister(!isRegister)}
-                    className="text-primary font-medium ml-1"
+                    onClick={() => setMode(mode === "register" ? "login" : "register")}
+                    className="text-primary font-medium"
                   >
-                    {isRegister ? "去登录" : "注册"}
+                    {mode === "register" ? "去登录" : "注册账号"}
                   </button>
-                </p>
+                  <button
+                    type="button"
+                    onClick={() => setMode(mode === "reset" ? "login" : "reset")}
+                    className="text-primary font-medium"
+                  >
+                    {mode === "reset" ? "返回登录" : "忘记密码"}
+                  </button>
+                </div>
+
+                {mode === "register" && (
+                  <p className="text-xs text-muted-foreground leading-5">
+                    注册要求：手机号必须是 11 位大陆手机号，密码至少 8 位。
+                  </p>
+                )}
+                {mode === "reset" && (
+                  <p className="text-xs text-muted-foreground leading-5">
+                    重置后会直接写入新密码并自动登录。当前版本先用手机号找回，后续可再加短信验证码。
+                  </p>
+                )}
               </form>
             </CardContent>
           </Card>

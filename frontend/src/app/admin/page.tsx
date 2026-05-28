@@ -56,7 +56,7 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-background">
       <BlurFade delay={0.05}>
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 px-5 pt-12 pb-8 rounded-b-[2rem]">
+        <div className="bg-gradient-to-br from-amber-500 via-amber-600 to-orange-500 px-5 pt-12 pb-8 rounded-b-[2rem]">
           <div className="flex items-center justify-between">
             <h1 className="text-lg font-bold text-white">管理后台</h1>
             <button onClick={() => router.push("/profile")} className="text-white/60 text-sm">返回</button>

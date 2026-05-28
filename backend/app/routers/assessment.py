@@ -16,7 +16,7 @@ import tempfile
 from pathlib import Path
 from uuid import UUID
 from typing import Any, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime
@@ -27,9 +27,16 @@ from app.models.models import (
     User, Family, ChildProfile,
     AssessmentTemplate, AssessmentRecord, AssessmentReport,
 )
-from app.services.assessment_workbook_importer import upsert_templates_from_workbook
+from app.services.assessment_workbook_importer import build_assessment_workbook_preview, upsert_templates_from_workbook
 
 router = APIRouter(prefix="/assessments", tags=["assessments"])
+ALLOWED_ASSESSMENT_CATEGORIES = {"learning", "creativity", "talent", "parent_child"}
+CATEGORY_LABELS = {
+    "learning": "学习力",
+    "creativity": "创造力和综合能力",
+    "talent": "个人天赋",
+    "parent_child": "亲子关系",
+}
 
 
 # ============ Schemas ============
@@ -78,15 +85,40 @@ class ReportDetail(BaseModel):
     ai_content_json: Optional[dict]
     consultant_notes: Optional[str]
     final_content_json: Optional[dict]
+    content_json: Optional[dict]
     status: str
     published_at: Optional[datetime]
+
+
+class WorkbookSectionPreview(BaseModel):
+    sheet_name: str
+    question_count: int
+    sample_questions: list[str]
+
+
+class WorkbookPreviewResponse(BaseModel):
+    bucket: str
+    bucket_label: str
+    title: str
+    category: str
+    description: Optional[str]
+    question_count: int
+    sheet_count: int
+    included_sheets: list[str]
+    excluded_sheets: list[str]
+    sections: list[WorkbookSectionPreview]
 
 
 class WorkbookImportResponse(BaseModel):
     created: int
     updated: int
     total: int
+    bucket: str
     templates: list
+    sections: list[WorkbookSectionPreview]
+    included_sheets: list[str]
+    excluded_sheets: list[str]
+    question_count: int
 
 
 # ============ 用户端 API ============
@@ -98,7 +130,8 @@ def list_templates(
 ):
     """获取可用测评列表"""
     templates = db.query(AssessmentTemplate).filter(
-        AssessmentTemplate.is_active == True
+        AssessmentTemplate.is_active == True,
+        AssessmentTemplate.category.in_(ALLOWED_ASSESSMENT_CATEGORIES),
     ).order_by(AssessmentTemplate.sort_order).all()
 
     return [
@@ -127,6 +160,8 @@ def get_template(
         AssessmentTemplate.is_active == True,
     ).first()
     if not template:
+        raise HTTPException(status_code=404, detail="测评不存在")
+    if template.category not in ALLOWED_ASSESSMENT_CATEGORIES:
         raise HTTPException(status_code=404, detail="测评不存在")
 
     return {
@@ -263,6 +298,7 @@ def get_report(
     record = db.query(AssessmentRecord).filter(AssessmentRecord.id == report.record_id).first()
     template = db.query(AssessmentTemplate).filter(AssessmentTemplate.id == record.template_id).first() if record else None
     child = db.query(ChildProfile).filter(ChildProfile.id == report.child_id).first()
+    content_json = report.final_content_json or report.ai_content_json
 
     return {
         "id": report.id,
@@ -270,7 +306,9 @@ def get_report(
         "template_title": template.title if template else "",
         "category": template.category if template else "",
         "scores_json": record.scores_json if record else None,
+        "ai_content_json": report.ai_content_json,
         "final_content_json": report.final_content_json,
+        "content_json": content_json,
         "consultant_notes": report.consultant_notes,
         "status": report.status,
         "published_at": report.published_at,
@@ -294,16 +332,18 @@ class ReportReviewRequest(BaseModel):
     action: str  # "publish" / "save_draft"
 
 
-@router.post("/admin/templates/import-xlsx", response_model=WorkbookImportResponse)
-async def import_templates_from_xlsx(
+@router.post("/admin/templates/preview-xlsx", response_model=WorkbookPreviewResponse)
+async def preview_templates_from_xlsx(
     file: UploadFile = File(...),
+    bucket: str = Form("learning"),
     current_user: User = Depends(require_admin),
-    db: Session = Depends(get_db),
 ):
-    """上传学习力测评 Excel，自动拆成多个测评模板"""
+    """预览 Excel 导入结果，不写库"""
     filename = (file.filename or "").lower()
     if not filename.endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="请上传 .xlsx 文件")
+    if bucket not in ALLOWED_ASSESSMENT_CATEGORIES:
+        raise HTTPException(status_code=400, detail="请选择正确的测评类别")
 
     with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
         tmp_path = tmp.name
@@ -311,8 +351,58 @@ async def import_templates_from_xlsx(
         tmp.write(content)
 
     try:
-        result = upsert_templates_from_workbook(db, tmp_path)
-        return result
+        preview = build_assessment_workbook_preview(tmp_path, bucket)
+        return WorkbookPreviewResponse(
+            bucket=preview["bucket"],
+            bucket_label=CATEGORY_LABELS.get(preview["bucket"], preview["bucket"]),
+            title=preview["title"],
+            category=preview["category"],
+            description=preview.get("description"),
+            question_count=preview.get("question_count", 0),
+            sheet_count=preview.get("sheet_count", 0),
+            included_sheets=preview.get("included_sheets", []),
+            excluded_sheets=preview.get("excluded_sheets", []),
+            sections=[WorkbookSectionPreview(**item) for item in preview.get("sections", [])],
+        )
+    finally:
+        try:
+            Path(tmp_path).unlink(missing_ok=True)
+        except Exception:
+            pass
+
+
+@router.post("/admin/templates/import-xlsx", response_model=WorkbookImportResponse)
+async def import_templates_from_xlsx(
+    file: UploadFile = File(...),
+    bucket: str = Form("learning"),
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """上传测评 Excel，自动生成一个可发布的测评模板"""
+    filename = (file.filename or "").lower()
+    if not filename.endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="请上传 .xlsx 文件")
+    if bucket not in ALLOWED_ASSESSMENT_CATEGORIES:
+        raise HTTPException(status_code=400, detail="请选择正确的测评类别")
+
+    with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+        tmp_path = tmp.name
+        content = await file.read()
+        tmp.write(content)
+
+    try:
+        result = upsert_templates_from_workbook(db, tmp_path, bucket=bucket)
+        return WorkbookImportResponse(
+            created=result["created"],
+            updated=result["updated"],
+            total=result["total"],
+            bucket=result["bucket"],
+            templates=result["templates"],
+            sections=[WorkbookSectionPreview(**item) for item in result.get("sections", [])],
+            included_sheets=result.get("included_sheets", []),
+            excluded_sheets=result.get("excluded_sheets", []),
+            question_count=result.get("question_count", 0),
+        )
     finally:
         try:
             Path(tmp_path).unlink(missing_ok=True)
@@ -327,6 +417,9 @@ def create_template(
     db: Session = Depends(get_db),
 ):
     """创建测评模板"""
+    if req.category not in ALLOWED_ASSESSMENT_CATEGORIES:
+        raise HTTPException(status_code=400, detail="分类仅支持学习力、创造力和综合能力、个人天赋、亲子关系")
+
     template = AssessmentTemplate(
         title=req.title,
         category=req.category,
@@ -352,6 +445,9 @@ def update_template(
     template = db.query(AssessmentTemplate).filter(AssessmentTemplate.id == template_id).first()
     if not template:
         raise HTTPException(status_code=404, detail="模板不存在")
+
+    if req.category not in ALLOWED_ASSESSMENT_CATEGORIES:
+        raise HTTPException(status_code=400, detail="分类仅支持学习力、创造力和综合能力、个人天赋、亲子关系")
 
     template.title = req.title
     template.category = req.category
@@ -393,6 +489,45 @@ def admin_list_records(
     return result
 
 
+@router.get("/admin/reports/{report_id}")
+def admin_get_report(
+    report_id: UUID,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """管理员查看测评报告详情（含草稿与最终稿）"""
+    report = db.query(AssessmentReport).filter(AssessmentReport.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="报告不存在")
+
+    record = db.query(AssessmentRecord).filter(AssessmentRecord.id == report.record_id).first()
+    template = db.query(AssessmentTemplate).filter(AssessmentTemplate.id == record.template_id).first() if record else None
+    child = db.query(ChildProfile).filter(ChildProfile.id == report.child_id).first()
+    family = db.query(Family).filter(Family.id == report.family_id).first()
+    content_json = report.final_content_json or report.ai_content_json
+
+    return {
+        "id": report.id,
+        "family_name": family.family_name if family else "",
+        "child_name": child.name if child else "",
+        "child_summary": {
+            "name": child.name if child else "",
+            "age": child.age if child else None,
+            "grade": child.grade if child else None,
+        },
+        "template_title": template.title if template else "",
+        "category": template.category if template else "",
+        "scores_json": record.scores_json if record else None,
+        "answers_json": record.answers_json if record else None,
+        "ai_content_json": report.ai_content_json,
+        "final_content_json": report.final_content_json,
+        "content_json": content_json,
+        "consultant_notes": report.consultant_notes,
+        "status": report.status,
+        "published_at": report.published_at,
+    }
+
+
 @router.put("/admin/reports/{report_id}")
 def review_report(
     report_id: UUID,
@@ -411,6 +546,8 @@ def review_report(
         report.final_content_json = req.final_content_json
 
     if req.action == "publish":
+        if req.final_content_json is None and report.ai_content_json is not None:
+            report.final_content_json = report.ai_content_json
         report.status = "published"
         report.reviewed_by = current_user.id
         report.published_at = datetime.utcnow()
@@ -539,19 +676,158 @@ def _build_score_summary(scores: dict) -> dict:
     }
 
 
+LEARNING_MODULES = [
+    ("learning_advantage", "学习优势", ["认知模型", "记忆力", "个人学习方式"]),
+    ("creative_action", "创行力", ["目标管理", "执行力", "专注力"]),
+    ("inner_motivation", "心动力", ["学习意愿", "内驱力"]),
+    ("ecology_support", "生态承载力", ["家庭环境", "学校环境", "社会环境"]),
+]
+
+
+def _score_level(avg: float) -> str:
+    if avg >= 4.2:
+        return "优势明显"
+    if avg >= 3.4:
+        return "稳步成长"
+    if avg >= 2.8:
+        return "正在积累"
+    return "需要更多支持"
+
+
+def _avg_to_100(avg: float) -> int:
+    return int(round(max(0.0, min(5.0, avg)) * 20))
+
+
+def _build_learning_report_payload(child, template, scores: dict, answers: list) -> dict:
+    dimension_scores = scores.get("dimension_scores", {}) or {}
+    module_reports = []
+    module_totals: list[float] = []
+
+    for key, label, dimensions in LEARNING_MODULES:
+        parts = []
+        total = 0.0
+        count = 0
+        for dim in dimensions:
+            detail = dimension_scores.get(dim)
+            if not detail:
+                continue
+            parts.append((dim, detail))
+            total += float(detail.get("total", 0))
+            count += int(detail.get("count", 0) or 0)
+
+        if count:
+            avg = total / count
+            module_totals.append(avg)
+            ranked_dims = sorted(parts, key=lambda item: (item[1].get("average", 0), item[1].get("total", 0)), reverse=True)
+            weakest = sorted(parts, key=lambda item: (item[1].get("average", 0), item[1].get("total", 0)))
+            module_reports.append({
+                "key": key,
+                "name": label,
+                "score": _avg_to_100(avg),
+                "average": round(avg, 2),
+                "level": _score_level(avg),
+                "highlights": [f"{dim}较强" for dim, _ in ranked_dims[:2]],
+                "risks": [f"{dim}可以优先练习" for dim, _ in weakest[:1]],
+                "suggestions": [
+                    f"优先提升{weakest[0][0]}相关练习" if weakest else f"保持{label}现有优势",
+                    f"把{label}的改善动作拆成7天可执行小步",
+                ],
+            })
+
+    overall_avg = sum(module_totals) / len(module_totals) if module_totals else 0.0
+    dimension_ranked = sorted(dimension_scores.items(), key=lambda item: (item[1].get("average", 0), item[1].get("total", 0)), reverse=True)
+    dimension_low = sorted(dimension_scores.items(), key=lambda item: (item[1].get("average", 0), item[1].get("total", 0)))
+
+    tag_map = {
+        "认知模型": "认知基础较强",
+        "记忆力": "记忆保持较稳",
+        "个人学习方式": "学习方式清晰",
+        "目标管理": "目标感可继续强化",
+        "执行力": "执行推进型",
+        "专注力": "注意力分配可优化",
+        "学习意愿": "学习意愿较高",
+        "内驱力": "内驱动力可继续激活",
+        "家庭环境": "家庭支持可提升",
+        "学校环境": "学校支持适配度待观察",
+        "社会环境": "外部干扰需管理",
+    }
+    tags = []
+    for dim, detail in dimension_ranked[:4]:
+        if detail.get("average", 0) >= 3.8:
+            tags.append(tag_map.get(dim, f"{dim}较强"))
+    for dim, detail in dimension_low[:2]:
+        if detail.get("average", 0) < 3.2:
+            tags.append(tag_map.get(dim, f"{dim}需支持"))
+    if not tags:
+        tags = ["学习状态可继续优化"]
+
+    strengths = [f"{dim}表现较强" for dim, detail in dimension_ranked[:3] if detail.get("average", 0) >= 3.6]
+    areas = [f"{dim}是当前优先练习点" for dim, detail in dimension_low[:3] if detail.get("average", 0) < 3.6]
+    suggestions = []
+    for dim, detail in dimension_low[:3]:
+        if detail.get("average", 0) < 3.6:
+            suggestions.append(f"先用{dim}相关的短周期练习做启动")
+    if not suggestions:
+        suggestions.append("保持优势维度，同时每周复盘一次变化")
+
+    overall_level = _score_level(overall_avg)
+    if overall_avg >= 4.2:
+        summary = "学习力结构较强，适合继续拓展高阶任务。"
+    elif overall_avg >= 3.4:
+        summary = "学习力整体稳定，当前重点是巩固优势并继续成长。"
+    else:
+        summary = "学习力基础正在建立，建议先从最需要支持的环节开始。"
+
+    return {
+        "report_type": "learning_short_v1",
+        "summary": summary,
+        "overall_score": _avg_to_100(overall_avg),
+        "overall_average": round(overall_avg, 2),
+        "overall_level": overall_level,
+        "profile_tags": tags,
+        "module_reports": module_reports,
+        "dimension_scores": dimension_scores,
+        "strengths": strengths,
+        "areas_to_develop": areas,
+        "suggestions": suggestions,
+        "next_steps": {
+            "student": ["先从一个最弱维度开始改进", "连续7天记录一次学习状态"],
+            "parent": ["不要同时加太多要求", "先给孩子提供稳定支持和反馈"],
+            "30_days": ["观察一个月内四大模块的变化", "必要时进入深度版分项测评"],
+        },
+        "child_summary": {
+            "name": getattr(child, "name", ""),
+            "age": getattr(child, "age", None),
+            "grade": getattr(child, "grade", None),
+        },
+        "answer_count": len(answers),
+    }
+
+
 async def _generate_ai_report(child, template, answers: list, scores: dict) -> dict:
     """用AI生成测评初步报告"""
+    score_summary = _build_score_summary(scores)
+    if template.category == "learning":
+        base_report = _build_learning_report_payload(child, template, scores, answers)
+    else:
+        base_report = {
+            "report_type": "generic_short_v1",
+            "summary": "测评已完成，待咨询师审核。",
+            "overall_score": "待评估",
+            "strengths": [],
+            "areas_to_develop": [],
+            "suggestions": [],
+        }
+
     try:
         from app.services.llm_service import chat_completion
 
-        # 构建答题摘要
         answer_summary = ""
         for ans in answers[:20]:
             q_idx = ans.get("question_index", 0)
             if q_idx < len(template.questions_json):
                 q = template.questions_json[q_idx]
                 selected = ans.get("selected_value", "")
-                # 找到选项文本
                 option_text = selected
                 for opt in q.get("options", []):
                     if opt.get("value") == selected:
@@ -559,46 +835,66 @@ async def _generate_ai_report(child, template, answers: list, scores: dict) -> d
                         break
                 answer_summary += f"Q: {q.get('question', '')} → {option_text}\n"
 
-        score_summary = _build_score_summary(scores)
-        score_summary_text = json.dumps(score_summary, ensure_ascii=False, indent=2)
-
-        prompt = f"""你是一位儿童发展评估专家。请根据以下测评结果，生成一份简要的评估报告。
+        if template.category == "learning":
+            prompt = f"""你是一位儿童学习力评估专家。请基于下面的结构化评分结果，输出一份严格符合JSON格式的学习力报告。
 
 孩子信息：{child.name}，{child.age or '未知'}岁，{child.grade or '未知'}年级
 测评类型：{template.title}（{template.category}）
 
-自动评分摘要：
-{score_summary_text}
+评分摘要：
+{json.dumps(score_summary, ensure_ascii=False, indent=2)}
 
-答题结果：
+题目作答摘要：
 {answer_summary}
 
-请以JSON格式返回评估报告：
+必须输出以下JSON结构，不要输出多余文本：
 {{
-  "summary": "一句话总结（20字以内）",
-  "strengths": ["优势1", "优势2"],
-  "areas_to_develop": ["待发展方向1", "待发展方向2"],
-  "suggestions": ["建议1", "建议2", "建议3"],
-  "overall_score": "A/B/C/D 等级"
+  "report_type": "learning_short_v1",
+  "summary": "一句话总评",
+  "overall_score": 0,
+  "overall_average": 0,
+  "overall_level": "优势明显 / 稳步成长 / 正在积累 / 需要更多支持",
+  "profile_tags": ["标签1", "标签2"],
+  "module_reports": [
+    {{
+      "key": "learning_advantage",
+      "name": "学习优势",
+      "score": 0,
+      "average": 0,
+      "level": "",
+      "highlights": ["亮点"],
+      "risks": ["风险"],
+      "suggestions": ["建议"]
+    }}
+  ],
+  "strengths": ["优势1"],
+  "areas_to_develop": ["优先练习点1"],
+  "suggestions": ["建议1", "建议2"],
+  "next_steps": {{
+    "student": ["学生建议"],
+    "parent": ["家长建议"],
+    "30_days": ["30天建议"]
+  }},
+  "child_summary": {{
+    "name": "{child.name}",
+    "age": {child.age if child.age is not None else 'null'},
+    "grade": {json.dumps(child.grade) if child.grade is not None else 'null'}
+  }},
+  "answer_count": {len(answers)}
 }}
 
 只返回JSON。"""
-
-        messages = [{"role": "user", "content": prompt}]
-        reply, _, _, _ = await chat_completion(messages, temperature=0.3, max_tokens=1500)
-
-        json_str = reply
-        if "```" in reply:
-            json_str = reply.split("```")[1].strip()
-            if json_str.startswith("json"):
-                json_str = json_str[4:].strip()
-        return json.loads(json_str)
-
+            messages = [{"role": "user", "content": prompt}]
+            reply, _, _, _ = await chat_completion(messages, temperature=0.25, max_tokens=1800)
+            json_str = reply
+            if "```" in reply:
+                json_str = reply.split("```")[1].strip()
+                if json_str.startswith("json"):
+                    json_str = json_str[4:].strip()
+            parsed = json.loads(json_str)
+            if isinstance(parsed, dict):
+                return parsed
     except Exception:
-        return {
-            "summary": "测评已完成，待咨询师审核",
-            "strengths": [],
-            "areas_to_develop": [],
-            "suggestions": [],
-            "overall_score": "待评估",
-        }
+        pass
+
+    return base_report

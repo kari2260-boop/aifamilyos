@@ -26,11 +26,10 @@ interface AssessmentRecordItem {
 }
 
 const categoryLabels: Record<string, string> = {
-  learning_style: "学习风格",
-  personality: "性格特征",
-  subject_interest: "学科兴趣",
-  learning_system: "学习系统",
-  mental_health: "心理健康",
+  learning: "学习力",
+  creativity: "创造力和综合能力",
+  talent: "个人天赋",
+  parent_child: "亲子关系",
 };
 
 export default function AssessmentPage() {

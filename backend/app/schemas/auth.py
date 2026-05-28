@@ -14,6 +14,11 @@ class UserLogin(BaseModel):
     password: str = Field(min_length=1, max_length=64)
 
 
+class PasswordResetRequest(BaseModel):
+    phone: str = Field(pattern=r'^1[3-9]\d{9}$', description="中国大陆手机号")
+    new_password: str = Field(min_length=8, max_length=64, description="新密码8-64位")
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"

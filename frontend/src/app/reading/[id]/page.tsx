@@ -6,7 +6,6 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSlug from "rehype-slug";
 import { api } from "@/lib/api";
-import PaywallModal from "@/components/PaywallModal";
 
 interface ArticleDetail {
   id: string;
@@ -48,7 +47,6 @@ export default function ArticleDetailPage() {
   const [article, setArticle] = useState<ArticleDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [readProgress, setReadProgress] = useState(0);
-  const [showPaywall, setShowPaywall] = useState(false);
 
   useEffect(() => {
     if (params.id) {
@@ -72,9 +70,6 @@ export default function ArticleDetailPage() {
     try {
       const data = await api.getArticle(id);
       setArticle(data);
-      if (data.locked === true || data.is_free === false) {
-        setShowPaywall(true);
-      }
     } catch {
       router.push("/reading");
     }
@@ -157,21 +152,16 @@ export default function ArticleDetailPage() {
 
         {/* 正文 */}
         {article.content_markdown && (
-          <div className={`mt-8 relative ${(article.locked || article.is_free === false) ? "max-h-60 overflow-hidden" : ""}`}>
+          <div className="mt-8 relative">
             <article className="prose prose-neutral prose-sm max-w-none prose-headings:text-foreground prose-p:text-foreground/90 prose-a:text-primary prose-strong:text-foreground">
               <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSlug]}>
                 {article.content_markdown}
               </ReactMarkdown>
             </article>
-            {(article.locked || article.is_free === false) && (
-              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/70 to-background pointer-events-none" />
-            )}
           </div>
         )}
       </div>
 
-      {/* 付费墙弹窗 */}
-      <PaywallModal open={showPaywall} onClose={() => setShowPaywall(false)} />
     </div>
   );
 }
