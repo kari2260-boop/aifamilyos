@@ -2,9 +2,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
+from app.utils.slowapi_compat import (
+    Limiter,
+    _rate_limit_exceeded_handler,
+    get_remote_address,
+    RateLimitExceeded,
+    slowapi_available,
+)
 from app.init_db import init_db
 from app.routers import auth, family, chat, knowledge, admin, booking, report, subscription, course, article, resource, prompt, assessment, consultation, analytics, upload, course_series
 
@@ -31,7 +35,8 @@ app = FastAPI(
 # 限流器
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+if slowapi_available:
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,

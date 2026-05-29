@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from app.utils.slowapi_compat import Limiter, get_remote_address
 from app.database import get_db
 from app.models import User
 from app.schemas.auth import UserRegister, UserLogin, PasswordResetRequest, TokenResponse, UserResponse
