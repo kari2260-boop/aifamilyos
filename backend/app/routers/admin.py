@@ -59,7 +59,9 @@ def list_families(
         SELECT f.id, f.family_name, f.city, f.created_at,
                u.phone as owner_phone,
                (SELECT COUNT(*) FROM children_profiles cp WHERE cp.family_id = f.id) as children_count,
-               (SELECT COUNT(*) FROM conversations c WHERE c.family_id = f.id) as conv_count
+               (SELECT COUNT(*) FROM conversations c WHERE c.family_id = f.id) as conv_count,
+               f.subscription_plan,
+               f.subscription_expires_at
         FROM families f
         JOIN users u ON u.id = f.owner_user_id
         ORDER BY f.created_at DESC
@@ -75,6 +77,8 @@ def list_families(
             children_count=row[5],
             conversations_count=row[6],
             created_at=row[3],
+            subscription_plan=row[7],
+            subscription_expires_at=row[8],
         )
         for row in rows
     ]
@@ -102,7 +106,12 @@ def get_family_detail(
         "family_name": family.family_name,
         "city": family.city,
         "membership_level": family.membership_level,
+        "subscription_plan": family.subscription_plan,
         "monthly_quota": family.monthly_quota,
+        "subscription_started_at": family.subscription_started_at.isoformat() if family.subscription_started_at else None,
+        "subscription_expires_at": family.subscription_expires_at.isoformat() if family.subscription_expires_at else None,
+        "assessment_quota": family.assessment_quota or 0,
+        "report_quota": family.report_quota or 0,
         "owner_phone": owner.phone if owner else "未知",
         "conversations_count": conv_count,
         "created_at": family.created_at.isoformat() if family.created_at else None,

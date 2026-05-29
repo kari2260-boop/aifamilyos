@@ -322,6 +322,20 @@ class ApiClient {
     return this.request(`/admin/families/${familyId}`);
   }
 
+  async adminGrantPlan(familyId: string, planId: string, note?: string) {
+    return this.request("/subscription/admin/grant", {
+      method: "POST",
+      body: JSON.stringify({ family_id: familyId, plan_id: planId, note: note || null }),
+    });
+  }
+
+  async adminRenewPlan(familyId: string, note?: string) {
+    return this.request("/subscription/admin/renew", {
+      method: "POST",
+      body: JSON.stringify({ family_id: familyId, note: note || null }),
+    });
+  }
+
   async adminConversations() {
     return this.request("/admin/conversations");
   }

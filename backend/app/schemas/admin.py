@@ -19,6 +19,8 @@ class AdminFamilyItem(BaseModel):
     children_count: int
     conversations_count: int
     created_at: datetime
+    subscription_plan: Optional[str] = None
+    subscription_expires_at: Optional[datetime] = None
 
 
 class AdminConversationItem(BaseModel):

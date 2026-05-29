@@ -32,8 +32,18 @@ class Family(Base):
     owner_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     family_name = Column(String(100), nullable=False)
     city = Column(String(50), nullable=True)
-    membership_level = Column(String(20), default="free")  # free / basic / premium
-    monthly_quota = Column(Integer, default=100)  # 每月对话次数上限
+
+    # 兼容旧字段，不再参与权限判断，后续迁移废弃
+    membership_level = Column(String(30), default="free")
+    monthly_quota = Column(Integer, nullable=True, default=5)  # NULL = 不限（pilot_9800）
+
+    # 订阅主字段 —— 权限判断统一看这里
+    subscription_plan = Column(String(30), nullable=True)       # free/trial_9_9/community_3480/pilot_9800
+    subscription_started_at = Column(DateTime, nullable=True)   # 开通时间
+    subscription_expires_at = Column(DateTime, nullable=True)   # 到期时间，NULL=永久有效
+    assessment_quota = Column(Integer, default=0)               # 剩余测评次数
+    report_quota = Column(Integer, default=0)                   # 剩余报告次数
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

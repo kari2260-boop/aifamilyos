@@ -47,7 +47,7 @@ async def send_message(
     if not family:
         raise HTTPException(status_code=400, detail="请先创建家庭档案")
 
-    # 配额检查
+    # 配额检查（统一看 subscription_plan，monthly_quota=NULL 表示不限）
     current_month = date.today().strftime("%Y-%m")
     used = db.query(func.count(UsageLog.id)).filter(
         UsageLog.family_id == family.id,
@@ -55,10 +55,11 @@ async def send_message(
         func.to_char(UsageLog.created_at, "YYYY-MM") == current_month,
     ).scalar() or 0
 
-    if used >= family.monthly_quota:
+    quota = family.monthly_quota  # None = 不限
+    if quota is not None and used >= quota:
         raise HTTPException(
             status_code=429,
-            detail=f"本月对话次数已用完（{used}/{family.monthly_quota}），请升级套餐解锁更多对话"
+            detail=f"本月对话次数已用完（{used}/{quota}），请升级套餐解锁更多对话"
         )
 
     # 获取或创建对话
@@ -185,7 +186,7 @@ async def send_message(
         model_used=model_used,
         tokens_input=tokens_in,
         tokens_output=tokens_out,
-        remaining_quota=max(0, family.monthly_quota - used - 1),
+        remaining_quota=None if quota is None else max(0, quota - used - 1),
     )
 
 
@@ -355,7 +356,7 @@ async def stream_message(
             save_db.close()
 
         # 发送结束信号，携带消息ID和剩余配额
-        yield f"data: {json.dumps({'done': True, 'ai_message_id': ai_msg_id, 'remaining_quota': max(0, family.monthly_quota - used - 1)}, ensure_ascii=False)}\n\n"
+        yield f"data: {json.dumps({'done': True, 'ai_message_id': ai_msg_id, 'remaining_quota': None if quota is None else max(0, quota - used - 1)}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
         generate(),

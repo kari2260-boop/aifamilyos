@@ -40,15 +40,34 @@ const agents = [
 export default function Home() {
   const [courses, setCourses] = useState<Array<{id: string; title: string; category?: string}>>([]);
   const [articles, setArticles] = useState<Array<{id: string; title: string; summary?: string; author?: string}>>([]);
+  const [expiryDays, setExpiryDays] = useState<number | null>(null);
 
   useEffect(() => {
     api.request("/courses?size=6").then(data => setCourses(Array.isArray(data) ? data : [])).catch(() => {});
     api.request("/articles?size=5").then(data => setArticles(Array.isArray(data) ? data : [])).catch(() => {});
+    // 检查套餐是否即将到期（3天内）
+    api.request("/subscription/current").then((sub: {expires_at?: string | null; plan?: string}) => {
+      if (sub.expires_at && sub.plan && sub.plan !== "free") {
+        const diff = Math.ceil((new Date(sub.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+        if (diff >= 0 && diff <= 3) setExpiryDays(diff);
+      }
+    }).catch(() => {});
   }, []);
 
   return (
     <AuthGuard>
       <div className="min-h-screen bg-background pb-24">
+        {/* 到期提醒条 */}
+        {expiryDays !== null && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center justify-between">
+            <span className="text-sm text-amber-800">
+              {expiryDays === 0 ? "⚠️ 您的套餐今天到期" : `⚠️ 您的套餐还有 ${expiryDays} 天到期`}，续费后继续使用
+            </span>
+            <Link href="/subscribe" className="text-xs font-medium text-amber-700 underline shrink-0 ml-2">
+              立即续费
+            </Link>
+          </div>
+        )}
         {/* Banner */}
         <BlurFade delay={0.05}>
           <div className="bg-gradient-to-br from-primary to-[#8B7355] px-6 pt-14 pb-10 rounded-b-3xl">
