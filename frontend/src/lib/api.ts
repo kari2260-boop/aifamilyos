@@ -18,6 +18,7 @@ export function getApiBase(): string {
 
 const API_BASE = getApiBase();
 const REQUEST_TIMEOUT_MS = 12000;
+const CHAT_TIMEOUT_MS = 120000; // AI 对话单独用 120 秒，RAG+LLM 链路较长
 
 function formatApiError(detail: unknown): string {
   if (!detail) return "请求失败";
@@ -51,10 +52,10 @@ class ApiClient {
     return localStorage.getItem("token");
   }
 
-  async request(path: string, options: RequestInit = {}) {
+  async request(path: string, options: RequestInit = {}, timeoutMs: number = REQUEST_TIMEOUT_MS) {
     const token = this.getToken();
     const controller = new AbortController();
-    const timeoutId = globalThis.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const timeoutId = globalThis.setTimeout(() => controller.abort(), timeoutMs);
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       ...(options.headers as Record<string, string>),
@@ -136,7 +137,7 @@ class ApiClient {
         message,
         conversation_id: conversationId || null,
       }),
-    });
+    }, CHAT_TIMEOUT_MS);
   }
 
   async getConversations(agentType?: string) {

@@ -131,22 +131,94 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, userMsg]);
     setLoading(true);
 
+    // 先插入一条空的 AI 消息，流式填充内容
+    const streamingId = `ai-streaming-${Date.now()}`;
+    setMessages((prev) => [...prev, { id: streamingId, role: "assistant", content: "" }]);
+
     try {
-      const res = await api.chatSend(agentType, text, conversationId || undefined);
-      setConversationId(res.conversation_id);
-      if (res.remaining_quota !== undefined) {
-        setRemainingQuota(res.remaining_quota);
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const apiBase = (await import("@/lib/api")).getApiBase();
+      const res = await fetch(`${apiBase}/chat/stream`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          agent_type: agentType,
+          message: text,
+          conversation_id: conversationId || null,
+        }),
+        signal: AbortSignal.timeout(120000),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "发送失败" }));
+        throw new Error(err.detail || "发送失败");
       }
 
-      const aiMsg: ChatMessage = {
-        id: `ai-${Date.now()}`,
-        role: "assistant",
-        content: res.reply,
-      };
-      setMessages((prev) => [...prev, aiMsg]);
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) throw new Error("无法读取响应流");
+
+      let finalAiMsgId = streamingId;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const text = decoder.decode(value, { stream: true });
+        const lines = text.split("\n");
+
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          const raw = line.slice(5).trim();
+          if (!raw) continue;
+
+          try {
+            const data = JSON.parse(raw);
+
+            if (data.conversation_id) {
+              setConversationId(data.conversation_id);
+            } else if (data.content) {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === streamingId
+                    ? { ...m, content: m.content + data.content }
+                    : m
+                )
+              );
+            } else if (data.done) {
+              if (data.ai_message_id) {
+                finalAiMsgId = data.ai_message_id;
+                setMessages((prev) =>
+                  prev.map((m) => (m.id === streamingId ? { ...m, id: data.ai_message_id } : m))
+                );
+              }
+              if (data.remaining_quota !== undefined) {
+                setRemainingQuota(data.remaining_quota);
+              }
+            }
+          } catch {
+            // 忽略解析错误
+          }
+        }
+      }
+
+      void finalAiMsgId; // 避免 unused 警告
     } catch (e: unknown) {
-      const errMsg = e instanceof Error ? e.message : "发送失败";
-      setError(errMsg);
+      // 只有消息内容为空时才移除（避免把已生成的内容清掉）
+      setMessages((prev) => {
+        const streamingMsg = prev.find((m) => m.id === streamingId);
+        if (streamingMsg && streamingMsg.content.trim().length > 0) {
+          // 已有内容，保留，不显示错误
+          return prev;
+        }
+        // 没有内容，移除空消息并显示错误
+        const errMsg = e instanceof Error ? e.message : "发送失败";
+        setError(errMsg);
+        return prev.filter((m) => m.id !== streamingId);
+      });
     } finally {
       setLoading(false);
     }
@@ -323,7 +395,7 @@ export default function ChatPage() {
             </div>
           ))}
 
-          {loading && (
+          {loading && messages[messages.length - 1]?.role !== "assistant" && (
             <div className="flex justify-start">
               <div className="bg-card text-muted-foreground px-3.5 py-2.5 rounded-2xl rounded-bl-md text-sm border border-border shadow-sm">
                 <span className="animate-pulse">思考中...</span>

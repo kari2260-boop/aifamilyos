@@ -90,6 +90,29 @@ type ReportContent = {
   answer_count?: number;
 };
 
+interface ChildProfile {
+  name?: string;
+  age?: number | null;
+  grade?: string | null;
+  interests?: string | null;
+  learning_challenges?: string | null;
+  parent_expectations?: string | null;
+}
+
+interface PastAssessment {
+  title: string;
+  category: string;
+  published_at: string | null;
+  summary: string | null;
+}
+
+interface RecentConversation {
+  agent_type: string;
+  title: string | null;
+  summary: string | null;
+  updated_at: string | null;
+}
+
 interface ReportDetail {
   id: string;
   family_name: string;
@@ -103,11 +126,9 @@ interface ReportDetail {
   consultant_notes: string | null;
   status: string;
   published_at: string | null;
-  child_summary?: {
-    name?: string;
-    age?: number | null;
-    grade?: string | null;
-  };
+  child_profile?: ChildProfile;
+  past_assessments?: PastAssessment[];
+  recent_conversations?: RecentConversation[];
 }
 
 const categoryOptions = [
@@ -552,24 +573,57 @@ export default function AdminAssessmentPage() {
                   <div className="py-12 text-center text-muted-foreground text-sm">加载中...</div>
                 ) : reportDetail && (
                   <>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-xl border border-border bg-muted/20 p-3">
-                        <div className="text-xs text-muted-foreground">当前状态</div>
-                        <div className="mt-1 font-medium text-foreground">{reportDetail.status}</div>
+                    {/* 孩子档案 */}
+                    <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-2">
+                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">孩子档案</div>
+                      <div className="grid grid-cols-3 gap-2 text-sm">
+                        <div><span className="text-muted-foreground text-xs">姓名</span><div className="font-medium">{reportDetail.child_profile?.name || reportDetail.child_name || '-'}</div></div>
+                        <div><span className="text-muted-foreground text-xs">年龄</span><div className="font-medium">{reportDetail.child_profile?.age ? `${reportDetail.child_profile.age}岁` : '-'}</div></div>
+                        <div><span className="text-muted-foreground text-xs">年级</span><div className="font-medium">{reportDetail.child_profile?.grade || '-'}</div></div>
                       </div>
-                      <div className="rounded-xl border border-border bg-muted/20 p-3">
-                        <div className="text-xs text-muted-foreground">报告分类</div>
-                        <div className="mt-1 font-medium text-foreground">{categoryOptions.find((c) => c.value === reportDetail.category)?.label || reportDetail.category}</div>
-                      </div>
-                      <div className="rounded-xl border border-border bg-muted/20 p-3">
-                        <div className="text-xs text-muted-foreground">家庭 / 孩子</div>
-                        <div className="mt-1 font-medium text-foreground">{reportDetail.family_name} / {reportDetail.child_name}</div>
-                      </div>
-                      <div className="rounded-xl border border-border bg-muted/20 p-3">
-                        <div className="text-xs text-muted-foreground">模板名称</div>
-                        <div className="mt-1 font-medium text-foreground">{reportDetail.template_title}</div>
+                      {reportDetail.child_profile?.interests && (
+                        <div><span className="text-xs text-muted-foreground">兴趣爱好</span><p className="text-sm mt-0.5">{reportDetail.child_profile.interests}</p></div>
+                      )}
+                      {reportDetail.child_profile?.learning_challenges && (
+                        <div><span className="text-xs text-muted-foreground">学习卡点</span><p className="text-sm mt-0.5">{reportDetail.child_profile.learning_challenges}</p></div>
+                      )}
+                      {reportDetail.child_profile?.parent_expectations && (
+                        <div><span className="text-xs text-muted-foreground">家长期待</span><p className="text-sm mt-0.5">{reportDetail.child_profile.parent_expectations}</p></div>
+                      )}
+                      <div className="pt-1 border-t border-border text-xs text-muted-foreground">
+                        家庭：{reportDetail.family_name} · 测评：{reportDetail.template_title} · 状态：{reportDetail.status}
                       </div>
                     </div>
+
+                    {/* 历史测评摘要 */}
+                    {reportDetail.past_assessments && reportDetail.past_assessments.length > 0 && (
+                      <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-2">
+                        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">历史测评记录</div>
+                        <div className="space-y-2">
+                          {reportDetail.past_assessments.map((pa, i) => (
+                            <div key={i} className="text-sm border-l-2 border-primary/30 pl-3">
+                              <div className="font-medium">{pa.title} <span className="text-xs text-muted-foreground ml-1">{pa.published_at}</span></div>
+                              {pa.summary && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{pa.summary}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 近期 AI 对话摘要 */}
+                    {reportDetail.recent_conversations && reportDetail.recent_conversations.length > 0 && (
+                      <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-2">
+                        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">近期 AI 对话摘要</div>
+                        <div className="space-y-2">
+                          {reportDetail.recent_conversations.map((c, i) => (
+                            <div key={i} className="text-sm border-l-2 border-amber-300 pl-3">
+                              <div className="font-medium">{c.title || c.agent_type} <span className="text-xs text-muted-foreground ml-1">{c.updated_at}</span></div>
+                              {c.summary && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{c.summary}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     <div>
                       <label className="text-sm font-medium text-foreground">最终报告内容 JSON</label>

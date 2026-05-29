@@ -24,7 +24,7 @@ from datetime import datetime
 from app.database import get_db
 from app.utils.auth import get_current_user, require_admin
 from app.models.models import (
-    User, Family, ChildProfile,
+    User, Family, ChildProfile, Conversation,
     AssessmentTemplate, AssessmentRecord, AssessmentReport,
 )
 from app.services.assessment_workbook_importer import build_assessment_workbook_preview, upsert_templates_from_workbook
@@ -506,15 +506,65 @@ def admin_get_report(
     family = db.query(Family).filter(Family.id == report.family_id).first()
     content_json = report.final_content_json or report.ai_content_json
 
+    # 历史测评摘要（同一孩子，最近5条，排除当前报告）
+    past_reports = (
+        db.query(AssessmentReport, AssessmentTemplate)
+        .join(AssessmentRecord, AssessmentRecord.id == AssessmentReport.record_id)
+        .join(AssessmentTemplate, AssessmentTemplate.id == AssessmentRecord.template_id)
+        .filter(
+            AssessmentReport.child_id == report.child_id,
+            AssessmentReport.id != report.id,
+            AssessmentReport.status == "published",
+        )
+        .order_by(AssessmentReport.published_at.desc())
+        .limit(5)
+        .all()
+    )
+    past_assessments = [
+        {
+            "title": t.title,
+            "category": t.category,
+            "published_at": str(r.published_at)[:10] if r.published_at else None,
+            "summary": (r.final_content_json or {}).get("summary") if r.final_content_json else None,
+        }
+        for r, t in past_reports
+    ]
+
+    # 近期 AI 对话摘要（同一家庭，最近5条有摘要的）
+    recent_convs = (
+        db.query(Conversation)
+        .filter(
+            Conversation.family_id == report.family_id,
+            Conversation.summary.isnot(None),
+        )
+        .order_by(Conversation.updated_at.desc())
+        .limit(5)
+        .all()
+    )
+    recent_conversations = [
+        {
+            "agent_type": c.agent_type,
+            "title": c.title,
+            "summary": c.summary,
+            "updated_at": str(c.updated_at)[:10] if c.updated_at else None,
+        }
+        for c in recent_convs
+    ]
+
     return {
         "id": report.id,
         "family_name": family.family_name if family else "",
         "child_name": child.name if child else "",
-        "child_summary": {
+        "child_profile": {
             "name": child.name if child else "",
             "age": child.age if child else None,
             "grade": child.grade if child else None,
+            "interests": child.interests if child else None,
+            "learning_challenges": child.learning_challenges if child else None,
+            "parent_expectations": child.parent_expectations if child else None,
         },
+        "past_assessments": past_assessments,
+        "recent_conversations": recent_conversations,
         "template_title": template.title if template else "",
         "category": template.category if template else "",
         "scores_json": record.scores_json if record else None,
