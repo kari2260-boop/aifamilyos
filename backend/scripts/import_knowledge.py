@@ -52,6 +52,12 @@ def read_file(file_path: Path) -> str:
         return ""
 
 
+def iter_supported_files(category_dir: Path):
+    for file_path in sorted(category_dir.rglob("*")):
+        if file_path.is_file() and file_path.suffix.lower() in SUPPORTED_EXTENSIONS | {".pdf"}:
+            yield file_path
+
+
 async def process_file(file_path: Path, category: str, db) -> bool:
     """处理单个文件"""
     print(f"  处理: {file_path.name}")
@@ -158,10 +164,7 @@ async def main():
             print(f"分类: {category} ({category_dir.name})")
             print(f"{'='*50}")
 
-            files = sorted([
-                f for f in category_dir.iterdir()
-                if f.is_file() and f.suffix.lower() in SUPPORTED_EXTENSIONS | {".pdf"}
-            ])
+            files = list(iter_supported_files(category_dir))
 
             if not files:
                 print("  没有找到支持的文件")

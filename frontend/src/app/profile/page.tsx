@@ -98,9 +98,13 @@ export default function ProfilePage() {
   };
 
   const membershipLabel: Record<string, string> = {
-    free: "免费版",
+    free: "Free",
+    trial_9_9: "9.9体验包",
+    community_3480: "3480社区年课",
+    pilot_9800: "9800领航版",
     trial: "试用中",
     premium: "高级会员",
+    basic: "基础版",
   };
 
   if (loading) {
