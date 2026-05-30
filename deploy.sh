@@ -55,14 +55,30 @@ docker compose -f docker-compose.prod.yml build
 echo "启动服务..."
 docker compose -f docker-compose.prod.yml up -d
 
-# 5. 等待数据库就绪
+# 5. 配置宿主机 nginx 反代
+if command -v nginx >/dev/null 2>&1; then
+    echo "配置宿主机 nginx..."
+    install -d /etc/nginx/sites-available /etc/nginx/sites-enabled
+    cp nginx/nginx.host.conf /etc/nginx/sites-available/ai-family-os.conf
+    ln -sf /etc/nginx/sites-available/ai-family-os.conf /etc/nginx/sites-enabled/ai-family-os.conf
+    if [ -f /etc/nginx/sites-enabled/default ]; then
+        rm -f /etc/nginx/sites-enabled/default
+    fi
+    nginx -t
+    systemctl reload nginx || systemctl restart nginx
+else
+    echo "警告: 宿主机 nginx 未安装，已仅启动容器服务。"
+    echo "       需要在服务器上安装 nginx 并加载 nginx/nginx.host.conf 才能通过 80 端口访问。"
+fi
+
+# 6. 等待数据库就绪
 echo "等待数据库..."
 sleep 10
 
-# 6. 健康检查
+# 7. 健康检查
 echo "检查服务状态..."
 docker compose -f docker-compose.prod.yml ps
-curl -fsS http://127.0.0.1/health >/dev/null
+curl -fsS http://127.0.0.1:8000/health >/dev/null
 
 echo ""
 echo "=== 部署完成 ==="
@@ -72,6 +88,6 @@ echo "管理后台: http://your-domain.com/admin"
 echo "部署 commit: $CURRENT_COMMIT"
 echo ""
 echo "下一步:"
-echo "1. 配置 SSL 证书到 nginx/ssl/"
-echo "2. 修改 nginx.conf 中的 server_name"
-echo "3. docker compose -f docker-compose.prod.yml restart nginx"
+echo "1. 如需 HTTPS，再为宿主机 nginx 配置证书"
+echo "2. 确认宿主机 nginx 已加载 ai-family-os.conf"
+echo "3. 如需重新部署，重复执行 deploy.sh"
