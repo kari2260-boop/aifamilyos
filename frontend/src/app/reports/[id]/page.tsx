@@ -14,11 +14,18 @@ interface DimensionData {
   discoveries?: string[];
 }
 
+interface ProfileChanges {
+  new_tags?: string[];
+  growth_moments?: string[];
+  compared_to_last_month?: string;
+}
+
 interface ReportContent {
   summary?: string;
   learning?: DimensionData;
   creativity?: DimensionData;
   talent?: DimensionData;
+  profile_changes?: ProfileChanges;
   overall_suggestions?: string[];
 }
 
@@ -99,6 +106,49 @@ export default function ReportDetailPage() {
           {content.talent && (
             <BlurFade delay={0.25}>
               <DimensionCard title="天赋发现" color="purple" score={content.talent.score} items={content.talent.discoveries} suggestions={content.talent.suggestions} />
+            </BlurFade>
+          )}
+
+          {/* 成长轨迹（画像变化对比） */}
+          {content.profile_changes && (
+            <BlurFade delay={0.28}>
+              <Card className="border-0 shadow-md">
+                <CardContent className="p-4">
+                  <h3 className="font-semibold text-foreground mb-3">成长轨迹</h3>
+
+                  {content.profile_changes.compared_to_last_month && (
+                    <div className="bg-amber-50 rounded-xl p-3 mb-3">
+                      <p className="text-xs text-muted-foreground mb-1">与上月对比</p>
+                      <p className="text-sm text-foreground">{content.profile_changes.compared_to_last_month}</p>
+                    </div>
+                  )}
+
+                  {content.profile_changes.growth_moments && content.profile_changes.growth_moments.length > 0 && (
+                    <div className="mb-3">
+                      <p className="text-xs text-muted-foreground mb-2">本月关键事件</p>
+                      <div className="space-y-1.5">
+                        {content.profile_changes.growth_moments.map((m, i) => (
+                          <div key={i} className="flex gap-2 items-start">
+                            <span className="text-amber-500 shrink-0 mt-0.5">★</span>
+                            <p className="text-sm text-foreground">{m}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {content.profile_changes.new_tags && content.profile_changes.new_tags.length > 0 && (
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-2">新增成长标签</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {content.profile_changes.new_tags.map((tag, i) => (
+                          <span key={i} className="px-2 py-0.5 bg-primary/10 text-primary text-xs rounded-full">{tag}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </BlurFade>
           )}
 

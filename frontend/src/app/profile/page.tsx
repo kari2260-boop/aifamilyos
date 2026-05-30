@@ -41,6 +41,9 @@ export default function ProfilePage() {
   const [editingChild, setEditingChild] = useState<Child | null>(null);
   const [tags, setTags] = useState<Record<string, Tag[]>>({});
   const [refreshingTags, setRefreshingTags] = useState<string | null>(null);
+  const [addingChild, setAddingChild] = useState(false);
+  const [newChild, setNewChild] = useState({ name: "", age: "", grade: "" });
+  const [savingChild, setSavingChild] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -95,6 +98,25 @@ export default function ProfilePage() {
   const handleLogout = () => {
     localStorage.removeItem("token");
     router.push("/login");
+  };
+
+  const handleAddChild = async () => {
+    if (!newChild.name.trim()) return;
+    setSavingChild(true);
+    try {
+      const created = await api.createChild({
+        name: newChild.name.trim(),
+        age: newChild.age ? Number(newChild.age) : undefined,
+        grade: newChild.grade.trim() || undefined,
+      });
+      setChildren((prev) => [...prev, created]);
+      setNewChild({ name: "", age: "", grade: "" });
+      setAddingChild(false);
+    } catch {
+      alert("添加失败，请重试");
+    } finally {
+      setSavingChild(false);
+    }
   };
 
   const membershipLabel: Record<string, string> = {
@@ -181,10 +203,88 @@ export default function ProfilePage() {
           {/* 孩子列表 */}
           <BlurFade delay={0.15}>
             <div className="mt-6">
-              <h2 className="font-semibold text-foreground mb-3">孩子档案</h2>
-              {children.length === 0 && (
-                <div className="bg-card rounded-2xl shadow-sm p-6 text-center">
-                  <p className="text-muted-foreground text-sm">暂无孩子信息</p>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-semibold text-foreground">孩子档案</h2>
+                {family && children.length < 3 && !addingChild && (
+                  <button
+                    onClick={() => setAddingChild(true)}
+                    className="text-xs text-primary font-medium flex items-center gap-1"
+                  >
+                    <span className="text-base leading-none">+</span> 添加孩子
+                  </button>
+                )}
+              </div>
+
+              {/* 无家庭档案引导 */}
+              {!family && (
+                <div className="bg-card rounded-2xl shadow-sm p-6 text-center space-y-3">
+                  <p className="text-2xl">👨‍👩‍👧</p>
+                  <p className="text-sm font-medium text-foreground">还没有家庭档案</p>
+                  <p className="text-xs text-muted-foreground">建立档案后，AI 才能了解你的孩子，提供个性化建议</p>
+                  <button
+                    onClick={() => router.push("/onboarding")}
+                    className="mt-1 px-5 py-2 bg-primary text-white text-sm rounded-xl font-medium"
+                  >
+                    立即建立档案
+                  </button>
+                </div>
+              )}
+
+              {/* 有家庭但无孩子 */}
+              {family && children.length === 0 && !addingChild && (
+                <div className="bg-card rounded-2xl shadow-sm p-6 text-center space-y-3">
+                  <p className="text-2xl">🧒</p>
+                  <p className="text-sm text-muted-foreground">还没有孩子档案</p>
+                  <button
+                    onClick={() => setAddingChild(true)}
+                    className="px-5 py-2 bg-primary text-white text-sm rounded-xl font-medium"
+                  >
+                    添加孩子
+                  </button>
+                </div>
+              )}
+
+              {/* 新增孩子表单 */}
+              {addingChild && (
+                <div className="bg-card rounded-2xl shadow-sm p-4 mb-3 space-y-3">
+                  <p className="text-sm font-medium text-foreground">新增孩子</p>
+                  <input
+                    className="w-full px-3 py-2 bg-muted/50 border border-border rounded-xl text-sm"
+                    value={newChild.name}
+                    onChange={(e) => setNewChild({ ...newChild, name: e.target.value })}
+                    placeholder="孩子姓名（必填）"
+                    autoFocus
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      className="px-3 py-2 bg-muted/50 border border-border rounded-xl text-sm"
+                      type="number"
+                      value={newChild.age}
+                      onChange={(e) => setNewChild({ ...newChild, age: e.target.value })}
+                      placeholder="年龄"
+                    />
+                    <input
+                      className="px-3 py-2 bg-muted/50 border border-border rounded-xl text-sm"
+                      value={newChild.grade}
+                      onChange={(e) => setNewChild({ ...newChild, grade: e.target.value })}
+                      placeholder="年级（如初二）"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleAddChild}
+                      disabled={savingChild || !newChild.name.trim()}
+                      className="flex-1 py-2 bg-primary text-white text-sm rounded-xl font-medium disabled:opacity-50"
+                    >
+                      {savingChild ? "保存中..." : "保存"}
+                    </button>
+                    <button
+                      onClick={() => { setAddingChild(false); setNewChild({ name: "", age: "", grade: "" }); }}
+                      className="flex-1 py-2 bg-muted text-foreground text-sm rounded-xl font-medium"
+                    >
+                      取消
+                    </button>
+                  </div>
                 </div>
               )}
               <div className="space-y-3">

@@ -6,6 +6,10 @@ set -e
 
 echo "=== AI 家庭成长 OS 部署 ==="
 
+BRANCH="${BRANCH:-main}"
+REPO_URL="${REPO_URL:-https://github.com/kari2260-boop/aifamilyos.git}"
+APP_DIR="/opt/ai-family-os"
+
 # 1. 检查 Docker
 if ! command -v docker &> /dev/null; then
     echo "安装 Docker..."
@@ -22,15 +26,20 @@ fi
 echo "Docker 版本: $(docker --version)"
 
 # 2. 拉取代码
-if [ ! -d "/opt/ai-family-os" ]; then
+if [ ! -d "$APP_DIR/.git" ]; then
     echo "克隆代码..."
-    git clone https://github.com/kari2260-boop/ai-family-os.git /opt/ai-family-os
+    git clone "$REPO_URL" "$APP_DIR"
 else
     echo "更新代码..."
-    cd /opt/ai-family-os && git pull
+    cd "$APP_DIR"
+    git fetch origin
+    git reset --hard "origin/$BRANCH"
 fi
 
-cd /opt/ai-family-os
+cd "$APP_DIR"
+
+CURRENT_COMMIT="$(git rev-parse HEAD)"
+echo "当前部署 commit: $CURRENT_COMMIT"
 
 # 3. 检查配置
 if [ ! -f ".env.production" ]; then
@@ -50,15 +59,17 @@ docker compose -f docker-compose.prod.yml up -d
 echo "等待数据库..."
 sleep 10
 
-# 6. 创建管理员账号
-echo "创建管理员账号..."
-docker compose -f docker-compose.prod.yml exec backend python -m scripts.create_admin admin123 admin123
+# 6. 健康检查
+echo "检查服务状态..."
+docker compose -f docker-compose.prod.yml ps
+curl -fsS http://127.0.0.1/health >/dev/null
 
 echo ""
 echo "=== 部署完成 ==="
 echo "前端: http://your-domain.com"
 echo "后端: http://your-domain.com/api"
 echo "管理后台: http://your-domain.com/admin"
+echo "部署 commit: $CURRENT_COMMIT"
 echo ""
 echo "下一步:"
 echo "1. 配置 SSL 证书到 nginx/ssl/"

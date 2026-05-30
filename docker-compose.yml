@@ -26,6 +26,7 @@ services:
     volumes:
       - ./backend:/app
       - ./uploads:/app/uploads
+      - /Users/kari77/Desktop/中国K12知识库:/knowledge_source:ro
     depends_on:
       db:
         condition: service_healthy

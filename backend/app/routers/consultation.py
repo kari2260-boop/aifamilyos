@@ -187,6 +187,18 @@ async def complete_record(
             pass  # 入库失败不阻塞完成操作
 
     db.commit()
+
+    # P2：把顾问观察合并进孩子画像（fire-and-forget）
+    if record.child_id:
+        try:
+            from app.services.profile_update_service import update_profile_from_consultation
+            import asyncio
+            asyncio.create_task(
+                update_profile_from_consultation(record.child_id, record.id, db)
+            )
+        except Exception:
+            pass
+
     return {"status": "ok"}
 
 

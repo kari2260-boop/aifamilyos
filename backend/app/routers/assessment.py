@@ -231,8 +231,17 @@ async def submit_assessment(
     # 自动刷新成长画像标签，便于后续在后台看到测评带来的画像更新
     try:
         from app.services.tag_service import analyze_child_tags
-
         await analyze_child_tags(str(child.id), db)
+    except Exception:
+        pass
+
+    # P2：把测评结论合并进孩子画像（fire-and-forget）
+    try:
+        from app.services.profile_update_service import update_profile_from_assessment
+        import asyncio
+        asyncio.create_task(
+            update_profile_from_assessment(child.id, record.id, db)
+        )
     except Exception:
         pass
 

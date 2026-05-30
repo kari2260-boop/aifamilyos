@@ -25,6 +25,29 @@ from app.services.knowledge_ingestion import ingest_content
 router = APIRouter(tags=["articles"])
 
 
+def _normalize_article(article: Article) -> dict:
+    """把历史脏数据补成接口期望的形态，避免旧记录把列表页打崩。"""
+    return {
+        "id": article.id,
+        "title": article.title,
+        "summary": article.summary,
+        "cover_url": article.cover_url,
+        "author": article.author,
+        "category": article.category,
+        "tags": article.tags or [],
+        "is_featured": bool(article.is_featured),
+        "is_free": bool(article.is_free),
+        "recommended_by": article.recommended_by,
+        "view_count": article.view_count or 0,
+        "published_at": article.published_at,
+        "created_at": article.created_at,
+        "is_published": bool(article.is_published),
+        "feishu_doc_id": article.feishu_doc_id,
+        "updated_at": article.updated_at,
+        "content_markdown": article.content_markdown,
+    }
+
+
 @router.get("/articles/featured", response_model=List[ArticleResponse])
 def list_featured_articles(
     size: int = Query(5, ge=1, le=20),
@@ -35,7 +58,7 @@ def list_featured_articles(
         Article.is_published == True,
         Article.is_featured == True,
     ).order_by(Article.published_at.desc()).limit(size).all()
-    return articles
+    return [_normalize_article(article) for article in articles]
 
 
 @router.get("/articles", response_model=List[ArticleResponse])
@@ -57,7 +80,7 @@ def list_articles(
     articles = query.order_by(Article.published_at.desc()).offset(
         (page - 1) * size
     ).limit(size).all()
-    return articles
+    return [_normalize_article(article) for article in articles]
 
 
 @router.get("/articles/{article_id}", response_model=ArticleDetailResponse)
@@ -76,7 +99,7 @@ def get_article(
     article.view_count = (article.view_count or 0) + 1
     db.commit()
 
-    return article
+    return _normalize_article(article)
 
 
 # --- 管理员接口 ---

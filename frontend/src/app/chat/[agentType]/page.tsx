@@ -39,6 +39,8 @@ export default function ChatPage() {
   const [shareQuestion, setShareQuestion] = useState("");
   const [shareAnswer, setShareAnswer] = useState("");
   const [isRecording, setIsRecording] = useState(false);
+  const [children, setChildren] = useState<{ id: string; name: string }[]>([]);
+  const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
@@ -80,6 +82,16 @@ export default function ChatPage() {
     }
     setIsRecording(false);
   };
+
+  useEffect(() => {
+    api.getChildren().then((c) => {
+      if (c && c.length > 0) {
+        setChildren(c);
+        const stored = localStorage.getItem("selectedChildId");
+        setSelectedChildId(stored && c.find((ch: { id: string }) => ch.id === stored) ? stored : c[0].id);
+      }
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     async function loadHistory() {
@@ -148,6 +160,7 @@ export default function ChatPage() {
           agent_type: agentType,
           message: text,
           conversation_id: conversationId || null,
+          child_id: selectedChildId || null,
         }),
         signal: AbortSignal.timeout(120000),
       });
@@ -235,36 +248,62 @@ export default function ChatPage() {
     <AuthGuard>
       <div className="fixed inset-0 bg-background flex flex-col max-w-md mx-auto">
         {/* 顶部栏 */}
-        <div className="bg-card px-4 py-3 flex items-center gap-3 border-b border-border shrink-0">
-          <button onClick={() => router.back()} className="text-muted-foreground text-xl hover:text-foreground transition">
-            ‹
-          </button>
-          <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${agent.gradient} flex items-center justify-center text-base shadow-sm`}>
-            {agent.icon}
-          </div>
-          <div className="flex-1">
-            <h2 className="font-semibold text-foreground text-sm">{agent.name}</h2>
-            <p className="text-xs text-muted-foreground">{agent.role}</p>
-          </div>
-          {remainingQuota !== null && (
-            <Link href="/subscribe" className={`text-xs px-2 py-1 rounded-full ${remainingQuota <= 5 ? "bg-red-100 text-red-600" : "bg-muted text-muted-foreground"}`}>
-              剩余 {remainingQuota} 次
-            </Link>
-          )}
-          {conversationId && messages.length > 0 && (
-            <button
-              onClick={async () => {
-                if (!confirm("确定清空当前对话？")) return;
-                try {
-                  await api.deleteConversation(conversationId);
-                  setMessages([]);
-                  setConversationId(null);
-                } catch {}
-              }}
-              className="text-xs px-2 py-1 rounded-full text-muted-foreground hover:text-destructive hover:bg-red-50 transition"
-            >
-              清空
+        <div className="bg-card border-b border-border shrink-0">
+          <div className="px-4 py-3 flex items-center gap-3">
+            <button onClick={() => router.back()} className="text-muted-foreground text-xl hover:text-foreground transition">
+              ‹
             </button>
+            <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${agent.gradient} flex items-center justify-center text-base shadow-sm`}>
+              {agent.icon}
+            </div>
+            <div className="flex-1">
+              <h2 className="font-semibold text-foreground text-sm">{agent.name}</h2>
+              <p className="text-xs text-muted-foreground">{agent.role}</p>
+            </div>
+            {remainingQuota !== null && (
+              <Link href="/subscribe" className={`text-xs px-2 py-1 rounded-full ${remainingQuota <= 5 ? "bg-red-100 text-red-600" : "bg-muted text-muted-foreground"}`}>
+                剩余 {remainingQuota} 次
+              </Link>
+            )}
+            {conversationId && messages.length > 0 && (
+              <button
+                onClick={async () => {
+                  if (!confirm("确定清空当前对话？")) return;
+                  try {
+                    await api.deleteConversation(conversationId);
+                    setMessages([]);
+                    setConversationId(null);
+                  } catch {}
+                }}
+                className="text-xs px-2 py-1 rounded-full text-muted-foreground hover:text-destructive hover:bg-red-50 transition"
+              >
+                清空
+              </button>
+            )}
+          </div>
+          {/* 孩子切换 tab（多孩子时显示） */}
+          {children.length > 1 && (
+            <div className="px-4 pb-2 flex gap-2 overflow-x-auto scrollbar-none">
+              {children.map((child) => (
+                <button
+                  key={child.id}
+                  onClick={() => {
+                    setSelectedChildId(child.id);
+                    localStorage.setItem("selectedChildId", child.id);
+                    // 切换孩子时清空当前对话，开启新对话
+                    setMessages([]);
+                    setConversationId(null);
+                  }}
+                  className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium transition ${
+                    selectedChildId === child.id
+                      ? "bg-primary text-white shadow-sm"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  }`}
+                >
+                  {child.name}
+                </button>
+              ))}
+            </div>
           )}
         </div>
 

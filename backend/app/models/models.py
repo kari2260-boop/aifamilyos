@@ -63,6 +63,7 @@ class ChildProfile(Base):
     interests = Column(Text, nullable=True)  # 兴趣爱好
     learning_challenges = Column(Text, nullable=True)  # 学习卡点
     parent_expectations = Column(Text, nullable=True)  # 家长期待
+    ai_profile = Column(JSONB, nullable=True)  # AI 持续更新的孩子画像
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -1,7 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeSlug from "rehype-slug";
+import { Bold, Heading2, Image as ImageIcon, Italic, List, ListOrdered, Minus, Quote } from "lucide-react";
 import { api } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { BlurFade } from "@/components/ui/blur-fade";
@@ -20,6 +24,8 @@ type Mode = "list" | "create" | "edit";
 
 export default function AdminArticlesPage() {
   const router = useRouter();
+  const contentRef = useRef<HTMLTextAreaElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<Mode>("list");
@@ -48,6 +54,90 @@ export default function AdminArticlesPage() {
   const resetForm = () => {
     setTitle(""); setSummary(""); setAuthor(""); setCategory("");
     setTags(""); setContentMarkdown(""); setIsPublished(true); setIsFree(true);
+  };
+
+  const replaceSelection = (before: string, after = "", fallback = "内容", block = false) => {
+    const el = contentRef.current;
+    if (!el) return;
+
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? 0;
+    const selected = contentMarkdown.slice(start, end);
+    const text = selected || fallback;
+    const leadingBreak = block && start > 0 && !contentMarkdown.slice(0, start).endsWith("\n\n") ? "\n\n" : "";
+    const trailingBreak = block ? "\n\n" : "";
+    const next = `${contentMarkdown.slice(0, start)}${leadingBreak}${before}${text}${after}${trailingBreak}${contentMarkdown.slice(end)}`;
+    const cursor = start + leadingBreak.length + before.length + text.length + after.length + trailingBreak.length;
+
+    setContentMarkdown(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(cursor, cursor);
+    });
+  };
+
+  const insertLinePrefix = (prefix: string, fallback = "标题") => {
+    const el = contentRef.current;
+    if (!el) return;
+
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? 0;
+    const selected = contentMarkdown.slice(start, end) || fallback;
+    const lineStart = contentMarkdown.lastIndexOf("\n", start - 1) + 1;
+    const next = `${contentMarkdown.slice(0, lineStart)}${prefix}${selected}${contentMarkdown.slice(end)}`;
+    const cursor = lineStart + prefix.length + selected.length;
+
+    setContentMarkdown(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(cursor, cursor);
+    });
+  };
+
+  const insertBlock = (snippet: string) => {
+    const el = contentRef.current;
+    if (!el) return;
+
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? 0;
+    const needsLeadingBreak = start > 0 && !contentMarkdown.slice(0, start).endsWith("\n\n");
+    const next = `${contentMarkdown.slice(0, start)}${needsLeadingBreak ? "\n\n" : ""}${snippet}${contentMarkdown.slice(end)}`;
+    const cursor = start + (needsLeadingBreak ? 2 : 0) + snippet.length;
+
+    setContentMarkdown(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(cursor, cursor);
+    });
+  };
+
+  const insertImageByUrl = () => {
+    const url = window.prompt("请输入图片地址");
+    if (!url) return;
+    const alt = window.prompt("请输入图片说明（可选）", "图片") || "图片";
+    insertBlock(`![${alt}](${url})`);
+  };
+
+  const uploadAndInsertImage = async (file?: File) => {
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await fetch(`${api.getBaseUrl()}/upload/image`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` },
+        body: formData,
+      });
+      if (!res.ok) throw new Error("上传失败");
+      const data = await res.json();
+      const baseUrl = api.getBaseUrl();
+      const imageUrl = baseUrl.startsWith("http") ? new URL(data.url, baseUrl).toString() : data.url;
+      const alt = file.name.replace(/\.[^.]+$/, "") || "图片";
+      insertBlock(`![${alt}](${imageUrl})`);
+      alert("图片上传成功");
+    } catch {
+      alert("图片上传失败");
+    }
   };
 
   const handleCreate = () => { resetForm(); setMode("create"); setEditId(null); };
@@ -184,7 +274,81 @@ export default function AdminArticlesPage() {
               </div>
               <div>
                 <label className="text-sm font-medium text-foreground">正文（Markdown）</label>
-                <textarea className="w-full mt-1 px-4 py-2.5 bg-muted/50 border border-border rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30" value={contentMarkdown} onChange={(e) => setContentMarkdown(e.target.value)} placeholder="支持 Markdown 格式" rows={12} />
+                <div className="mt-2 flex flex-wrap gap-2 rounded-xl border border-border bg-muted/30 p-2">
+                  <button type="button" title="标题" onClick={() => insertLinePrefix("## ")} className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1 text-xs text-foreground hover:bg-muted">
+                    <Heading2 className="h-3.5 w-3.5" />
+                    标题
+                  </button>
+                  <button type="button" title="加粗" onClick={() => replaceSelection("**", "**", "加粗文字")} className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1 text-xs text-foreground hover:bg-muted">
+                    <Bold className="h-3.5 w-3.5" />
+                    加粗
+                  </button>
+                  <button type="button" title="斜体" onClick={() => replaceSelection("*", "*", "斜体文字")} className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1 text-xs text-foreground hover:bg-muted">
+                    <Italic className="h-3.5 w-3.5" />
+                    斜体
+                  </button>
+                  <button type="button" title="引用" onClick={() => insertLinePrefix("> ")} className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1 text-xs text-foreground hover:bg-muted">
+                    <Quote className="h-3.5 w-3.5" />
+                    引用
+                  </button>
+                  <button type="button" title="无序列表" onClick={() => insertBlock("- 要点一\n- 要点二")} className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1 text-xs text-foreground hover:bg-muted">
+                    <List className="h-3.5 w-3.5" />
+                    列表
+                  </button>
+                  <button type="button" title="有序列表" onClick={() => insertBlock("1. 第一条\n2. 第二条")} className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1 text-xs text-foreground hover:bg-muted">
+                    <ListOrdered className="h-3.5 w-3.5" />
+                    编号
+                  </button>
+                  <button type="button" title="插入空行" onClick={() => insertBlock("")} className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1 text-xs text-foreground hover:bg-muted">
+                    <Minus className="h-3.5 w-3.5" />
+                    空行
+                  </button>
+                  <button type="button" title="插入图片链接" onClick={insertImageByUrl} className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1 text-xs text-foreground hover:bg-muted">
+                    <ImageIcon className="h-3.5 w-3.5" />
+                    图片链接
+                  </button>
+                  <button type="button" title="上传图片并插入" onClick={() => imageInputRef.current?.click()} className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1 text-xs text-foreground hover:bg-muted">
+                    <ImageIcon className="h-3.5 w-3.5" />
+                    上传图片
+                  </button>
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      void uploadAndInsertImage(file);
+                      e.currentTarget.value = "";
+                    }}
+                  />
+                </div>
+                <textarea
+                  ref={contentRef}
+                  className="w-full mt-2 px-4 py-3 bg-muted/50 border border-border rounded-xl text-sm font-mono leading-6 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  value={contentMarkdown}
+                  onChange={(e) => setContentMarkdown(e.target.value)}
+                  placeholder="支持 Markdown 格式。建议每个段落之间留空一行，可用上方按钮插入标题、列表和图片。"
+                  rows={14}
+                />
+                <p className="mt-2 text-xs text-muted-foreground">
+                  图片会以 Markdown 形式写入正文，阅读页会自动渲染。段落之间留空一行，就会有更好的阅读节奏。
+                </p>
+              </div>
+              <div className="rounded-xl border border-border bg-background p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium text-foreground">实时预览</span>
+                  <span className="text-xs text-muted-foreground">Markdown 渲染</span>
+                </div>
+                <div className="prose prose-sm prose-neutral max-w-none prose-headings:text-foreground prose-p:text-foreground/90 prose-strong:text-foreground prose-li:text-foreground/90 prose-blockquote:border-l-primary prose-blockquote:text-muted-foreground prose-img:rounded-xl prose-img:shadow-sm">
+                  {contentMarkdown.trim() ? (
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSlug]}>
+                      {contentMarkdown}
+                    </ReactMarkdown>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">这里会显示正文预览。</p>
+                  )}
+                </div>
               </div>
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={isFree} onChange={(e) => setIsFree(e.target.checked)} className="rounded" />

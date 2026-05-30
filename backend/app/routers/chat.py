@@ -16,7 +16,7 @@ from datetime import date
 
 from app.database import get_db
 from app.utils.auth import get_current_user
-from app.models.models import User, Family, Conversation, Message, UsageLog, RiskFlag
+from app.models.models import User, Family, Conversation, Message, UsageLog, RiskFlag, ChildProfile, GrowthTag
 from app.schemas.chat import (
     ChatSendRequest, ChatSendResponse,
     ConversationListItem, MessageItem,
@@ -25,10 +25,95 @@ from app.services.llm_service import chat_completion, chat_completion_stream
 from app.services.agent_prompts import get_agent_prompt
 from app.services.rag_service import retrieve_context
 from app.services.safety_service import check_risk, CRISIS_RESPONSE
+from app.services.profile_update_service import maybe_update_profile
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 VALID_AGENTS = {"xuexue", "chuangchuang", "tantan", "banban"}
+
+
+def build_child_context(child_id, family_id: str, db: Session) -> str:
+    """
+    根据 child_id 构建孩子画像上下文，注入 system prompt。
+    - 有 child_id：精确查该孩子
+    - 无 child_id：家庭只有1个孩子时自动使用，多孩子时不注入（避免猜错）
+    返回空字符串表示无可用画像。
+    """
+    child = None
+
+    if child_id:
+        child = db.query(ChildProfile).filter(
+            ChildProfile.id == child_id,
+            ChildProfile.family_id == family_id,
+        ).first()
+    else:
+        children = db.query(ChildProfile).filter(
+            ChildProfile.family_id == family_id,
+        ).all()
+        if len(children) == 1:
+            child = children[0]
+
+    if not child:
+        return ""
+
+    lines = [
+        "## 当前孩子档案（请基于以下信息个性化回答）",
+        f"- 姓名：{child.name}",
+    ]
+    if child.age:
+        lines.append(f"- 年龄：{child.age}岁")
+    if child.grade:
+        lines.append(f"- 年级：{child.grade}")
+    if child.interests:
+        lines.append(f"- 兴趣爱好：{child.interests}")
+    if child.learning_challenges:
+        lines.append(f"- 学习挑战：{child.learning_challenges}")
+    if child.parent_expectations:
+        lines.append(f"- 家长期望：{child.parent_expectations}")
+
+    # 成长标签
+    tags = db.query(GrowthTag).filter(
+        GrowthTag.child_id == child.id,
+    ).order_by(GrowthTag.confidence.desc()).all()
+
+    if tags:
+        tag_by_category: dict[str, list[str]] = {}
+        for t in tags:
+            tag_by_category.setdefault(t.tag_category, []).append(t.tag_name)
+
+        category_labels = {
+            "learning_style": "学习风格",
+            "interest": "兴趣方向",
+            "personality": "性格特点",
+            "potential": "潜力领域",
+        }
+        tag_lines = []
+        for cat, names in tag_by_category.items():
+            label = category_labels.get(cat, cat)
+            tag_lines.append(f"  - {label}：{'、'.join(names)}")
+        lines.append("- AI 成长画像标签：")
+        lines.extend(tag_lines)
+
+    # ai_profile 积累的动态画像（P1/P2 持续更新）
+    profile = child.ai_profile or {}
+    if profile.get("summary"):
+        lines.append(f"- 画像摘要：{profile['summary']}")
+    if profile.get("learning_style"):
+        lines.append(f"- 学习风格（AI观察）：{profile['learning_style']}")
+    if profile.get("strengths"):
+        lines.append(f"- 优势亮点：{profile['strengths']}")
+    if profile.get("challenges"):
+        lines.append(f"- 当前挑战：{profile['challenges']}")
+    if profile.get("consultant_summary"):
+        lines.append(f"- 顾问观察：{profile['consultant_summary']}")
+    if profile.get("consultant_insights"):
+        lines.append(f"- 专家洞察：{'、'.join(profile['consultant_insights'][:5])}")
+    if profile.get("key_moments"):
+        recent = profile["key_moments"][-3:]  # 只取最近3条，避免 prompt 过长
+        lines.append(f"- 近期关键事件：{'；'.join(recent)}")
+
+    lines.append("请在回答中充分考虑这个孩子的特点，给出个性化的建议。")
+    return "\n".join(lines)
 
 
 @router.post("/send", response_model=ChatSendResponse)
@@ -96,6 +181,11 @@ async def send_message(
 
     # 系统提示词（优先从DB读取，fallback到硬编码）
     system_prompt = get_agent_prompt(req.agent_type, db)
+
+    # 注入孩子画像（P0：个性化核心）
+    child_context = build_child_context(req.child_id, family.id, db)
+    if child_context:
+        system_prompt += f"\n\n{child_context}"
 
     # RAG 检索知识库（3个分类并行搜索，节省2-3秒）
     import asyncio
@@ -180,6 +270,9 @@ async def send_message(
 
     db.commit()
 
+    # P1：后台异步更新孩子画像（fire-and-forget，不阻塞响应）
+    await maybe_update_profile(req.child_id or conversation.child_id, conversation.id, db)
+
     return ChatSendResponse(
         conversation_id=conversation.id,
         reply=reply_content,
@@ -252,6 +345,11 @@ async def stream_message(
     ).order_by(Message.created_at.asc()).all()
 
     system_prompt = get_agent_prompt(req.agent_type, db)
+
+    # 注入孩子画像（P0：个性化核心）
+    child_context = build_child_context(req.child_id, family.id, db)
+    if child_context:
+        system_prompt += f"\n\n{child_context}"
 
     import asyncio
     agent_category_map = {
@@ -354,6 +452,13 @@ async def stream_message(
             ai_msg_id = ""
         finally:
             save_db.close()
+
+        # P1：后台异步更新孩子画像（fire-and-forget）
+        child_id_for_update = req.child_id or conversation.child_id
+        if child_id_for_update:
+            asyncio.create_task(
+                maybe_update_profile(child_id_for_update, conversation.id, db)
+            )
 
         # 发送结束信号，携带消息ID和剩余配额
         yield f"data: {json.dumps({'done': True, 'ai_message_id': ai_msg_id, 'remaining_quota': None if quota is None else max(0, quota - used - 1)}, ensure_ascii=False)}\n\n"
