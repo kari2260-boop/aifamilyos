@@ -18,15 +18,31 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column('children_profiles', sa.Column('ai_profile', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
-    # 用 IF NOT EXISTS 避免生产库已有索引时报错
+    conn = op.get_bind()
+
+    # ai_profile 字段 - IF NOT EXISTS
+    cols = [r[0] for r in conn.execute(sa.text(
+        "SELECT column_name FROM information_schema.columns WHERE table_name='children_profiles' AND column_name='ai_profile'"
+    )).fetchall()]
+    if not cols:
+        op.add_column('children_profiles', sa.Column('ai_profile', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
+
+    # 索引 - IF NOT EXISTS
     op.execute('CREATE INDEX IF NOT EXISTS ix_consultation_records_booking_id ON consultation_records (booking_id)')
     op.execute('CREATE INDEX IF NOT EXISTS ix_consultation_records_family_id ON consultation_records (family_id)')
-    op.add_column('course_modules', sa.Column('updated_at', sa.DateTime(), nullable=True))
-    # drop_column 加容错，生产库可能已经没有这个字段
-    conn = op.get_bind()
-    cols = [r[0] for r in conn.execute(sa.text("SELECT column_name FROM information_schema.columns WHERE table_name='courses' AND column_name='video_file_path'")).fetchall()]
-    if cols:
+
+    # course_modules.updated_at - IF NOT EXISTS
+    cols2 = [r[0] for r in conn.execute(sa.text(
+        "SELECT column_name FROM information_schema.columns WHERE table_name='course_modules' AND column_name='updated_at'"
+    )).fetchall()]
+    if not cols2:
+        op.add_column('course_modules', sa.Column('updated_at', sa.DateTime(), nullable=True))
+
+    # courses.video_file_path - 只在存在时才删
+    cols3 = [r[0] for r in conn.execute(sa.text(
+        "SELECT column_name FROM information_schema.columns WHERE table_name='courses' AND column_name='video_file_path'"
+    )).fetchall()]
+    if cols3:
         op.drop_column('courses', 'video_file_path')
 
 
