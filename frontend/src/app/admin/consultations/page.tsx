@@ -73,7 +73,7 @@ export default function AdminConsultationsPage() {
   return (
     <AuthGuard>
       <div className="min-h-screen bg-background pb-20">
-        <div className="bg-gradient-to-br from-amber-500 via-amber-600 to-orange-500 px-5 pt-12 pb-8 rounded-b-[2rem]">
+        <div className="bg-gradient-to-br from-primary to-[#8B7355] px-5 pt-12 pb-8 rounded-b-[2rem]">
           <h1 className="text-lg font-bold text-white">咨询记录管理</h1>
           <p className="text-white/60 text-xs mt-1">上传逐字稿、录入总结、制定方案</p>
         </div>

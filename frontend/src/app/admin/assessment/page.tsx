@@ -351,7 +351,7 @@ export default function AdminAssessmentPage() {
   return (
     <AuthGuard>
       <div className="min-h-screen bg-background pb-20">
-        <div className="bg-gradient-to-br from-amber-500 via-amber-600 to-orange-500 px-5 pt-12 pb-8 rounded-b-[2rem]">
+        <div className="bg-gradient-to-br from-primary to-[#8B7355] px-5 pt-12 pb-8 rounded-b-[2rem]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               {mode !== "list" && <button onClick={() => { setMode("list"); resetForm(); }} className="text-white/60 text-xl">‹</button>}

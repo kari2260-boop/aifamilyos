@@ -165,7 +165,7 @@ export default function AdminPromptsPage() {
   return (
     <div className="min-h-screen bg-background pb-10">
       <BlurFade delay={0.05}>
-        <div className="bg-gradient-to-br from-violet-700 to-purple-900 px-5 pt-12 pb-8 rounded-b-[2rem]">
+        <div className="bg-gradient-to-br from-primary to-[#8B7355] px-5 pt-12 pb-8 rounded-b-[2rem]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               {mode !== "list" && (

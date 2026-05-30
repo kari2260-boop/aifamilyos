@@ -120,7 +120,7 @@ export default function AssessmentReportPage() {
   return (
     <AuthGuard>
       <div className="min-h-screen bg-background pb-20">
-        <div className="bg-gradient-to-br from-amber-500 via-amber-600 to-orange-500 px-5 pt-12 pb-8 rounded-b-[2rem]">
+        <div className="bg-gradient-to-br from-primary to-[#8B7355] px-5 pt-12 pb-8 rounded-b-[2rem]">
           <div className="flex items-center justify-between gap-3">
             <button onClick={() => router.push("/assessment")} className="text-white/80 text-sm">返回</button>
             <h1 className="text-base font-bold text-white text-center flex-1 truncate">{title}</h1>
