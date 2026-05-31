@@ -31,10 +31,11 @@ services:
       - DATABASE_URL=postgresql://postgres:${DB_PASSWORD:-postgres}@db:5432/aifamily
     env_file:
       - .env.production
+    volumes:
+      - ./uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy
-    # 不挂载源码，使用镜像内代码
     # 仅绑定本机端口，由宿主机 nginx 反代
 
   frontend:
