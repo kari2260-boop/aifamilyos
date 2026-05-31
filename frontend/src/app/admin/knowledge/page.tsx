@@ -22,6 +22,7 @@ export default function AdminKnowledgePage() {
   const [docs, setDocs] = useState<DocItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const [category, setCategory] = useState("learning");
+  const [selectedFileName, setSelectedFileName] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -34,13 +35,17 @@ export default function AdminKnowledgePage() {
 
   const handleUpload = async () => {
     const file = fileRef.current?.files?.[0];
-    if (!file) return;
+    if (!file) {
+      fileRef.current?.click();
+      return;
+    }
 
     setUploading(true);
     try {
       await api.adminUploadKnowledge(file, category);
       loadDocs();
       if (fileRef.current) fileRef.current.value = "";
+      setSelectedFileName("");
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : "上传失败");
     } finally {
@@ -73,9 +78,24 @@ export default function AdminKnowledgePage() {
             ref={fileRef}
             type="file"
             accept=".txt,.md"
-            className="w-full text-sm text-muted-foreground"
+            className="hidden"
+            onChange={() => {
+              const file = fileRef.current?.files?.[0];
+              setSelectedFileName(file?.name || "");
+            }}
           />
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="px-3 py-2 rounded-lg border border-border bg-background text-foreground"
+            >
+              选择文件
+            </button>
+            <span className="truncate">{selectedFileName || "未选择任何文件"}</span>
+          </div>
           <button
+            type="button"
             onClick={handleUpload}
             disabled={uploading}
             className={`w-full py-2 rounded-lg text-sm text-white ${uploading ? "bg-gray-300" : "bg-primary active:scale-[0.98]"}`}

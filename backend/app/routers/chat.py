@@ -304,10 +304,11 @@ async def stream_message(
         func.to_char(UsageLog.created_at, "YYYY-MM") == current_month,
     ).scalar() or 0
 
-    if used >= family.monthly_quota:
+    quota = family.monthly_quota  # None = 不限量
+    if quota is not None and used >= quota:
         raise HTTPException(
             status_code=429,
-            detail=f"本月对话次数已用完（{used}/{family.monthly_quota}），请升级套餐解锁更多对话"
+            detail=f"本月对话次数已用完（{used}/{quota}），请升级套餐解锁更多对话"
         )
 
     # 获取或创建对话
@@ -383,6 +384,13 @@ async def stream_message(
 
     risk_level, risk_type = check_risk(req.message)
 
+    # 提前提取纯值，避免 generator 里 ORM 对象 session 失效
+    _family_id = str(family.id)
+    _user_id = str(current_user.id)
+    _conversation_id = conversation_id  # 已经是 str
+    _user_msg_id = user_msg_id          # 已经是 str
+    _child_id_for_update = str(req.child_id or conversation.child_id) if (req.child_id or conversation.child_id) else None
+
     async def generate():
         full_reply = ""
         tokens_in = 0
@@ -421,14 +429,14 @@ async def stream_message(
         try:
             if risk_level in ("high", "medium"):
                 save_db.add(RiskFlag(
-                    family_id=family.id,
-                    message_id=user_msg.id,
+                    family_id=_family_id,
+                    message_id=_user_msg_id,
                     risk_type=risk_type or "self_harm",
                     risk_level=risk_level,
                     content_snapshot=req.message[:500],
                 ))
             ai_msg = Message(
-                conversation_id=conversation.id,
+                conversation_id=_conversation_id,
                 role="assistant",
                 content=full_reply,
                 model_name=model_used,
@@ -438,8 +446,8 @@ async def stream_message(
             )
             save_db.add(ai_msg)
             save_db.add(UsageLog(
-                family_id=family.id,
-                user_id=current_user.id,
+                family_id=_family_id,
+                user_id=_user_id,
                 action_type="chat",
                 agent_type=req.agent_type,
                 tokens_input=tokens_in,
@@ -454,11 +462,16 @@ async def stream_message(
             save_db.close()
 
         # P1：后台异步更新孩子画像（fire-and-forget）
-        child_id_for_update = req.child_id or conversation.child_id
-        if child_id_for_update:
-            asyncio.create_task(
-                maybe_update_profile(child_id_for_update, conversation.id, db)
-            )
+        if _child_id_for_update:
+            async def update_profile_with_new_session():
+                from app.database import SessionLocal
+                profile_db = SessionLocal()
+                try:
+                    await maybe_update_profile(_child_id_for_update, _conversation_id, profile_db)
+                finally:
+                    profile_db.close()
+
+            asyncio.create_task(update_profile_with_new_session())
 
         # 发送结束信号，携带消息ID和剩余配额
         yield f"data: {json.dumps({'done': True, 'ai_message_id': ai_msg_id, 'remaining_quota': None if quota is None else max(0, quota - used - 1)}, ensure_ascii=False)}\n\n"

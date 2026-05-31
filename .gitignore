@@ -34,3 +34,4 @@ backend/knowledge_import_batch2/
 *.tar.gz
 *.csv
 frontend/Dockerfile.prod
+backend/import_k12.log
