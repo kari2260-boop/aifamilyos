@@ -11,28 +11,28 @@ const agents = [
     name: "学学",
     role: "学习策略师",
     description: "自己走过厌学，最懂「努力了没用」的感觉",
-    icon: "📚",
+    avatar: "/agents/xuexue.png",
     agentType: "xuexue",
   },
   {
     name: "创创",
     role: "创造引导师",
     description: "从小被说不务正业，现在帮孩子找到眼睛发光的事",
-    icon: "🎨",
+    avatar: "/agents/chuangchuang.png",
     agentType: "chuangchuang",
   },
   {
     name: "探探",
     role: "天赋发现师",
     description: "说话不多，但每次开口都让人觉得「被看见了」",
-    icon: "🔮",
+    avatar: "/agents/tantan.png",
     agentType: "tantan",
   },
   {
     name: "伴伴",
     role: "成长陪伴师",
     description: "两个孩子的妈妈，深夜崩溃过，也走过来了",
-    icon: "🤝",
+    avatar: "/agents/banban.png",
     agentType: "banban",
   },
 ];
@@ -93,7 +93,11 @@ export default function Home() {
               <BlurFade key={agent.agentType} delay={0.1 + i * 0.06}>
                 <Link href={`/chat/${agent.agentType}`}>
                   <div className="bg-card rounded-2xl shadow-sm p-4 transition-all hover:shadow-md active:scale-[0.97]">
-                    <div className="text-2xl mb-2">{agent.icon}</div>
+                    <img
+                      src={agent.avatar}
+                      alt={agent.name}
+                      className="mb-2 h-14 w-14 rounded-full border border-primary/20 object-cover shadow-sm"
+                    />
                     <h3 className="font-semibold text-foreground text-sm">{agent.name}</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">{agent.role}</p>
                     <p className="text-xs text-muted-foreground/70 mt-2 leading-relaxed">

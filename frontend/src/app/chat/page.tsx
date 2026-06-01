@@ -6,10 +6,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { BlurFade } from "@/components/ui/blur-fade";
 
 const agents = [
-  { name: "学学", role: "学习策略师", gradient: "from-blue-500 to-indigo-600", icon: "📚", agentType: "xuexue" },
-  { name: "创创", role: "创造引导师", gradient: "from-emerald-500 to-teal-600", icon: "🎨", agentType: "chuangchuang" },
-  { name: "探探", role: "天赋测评师", gradient: "from-violet-500 to-purple-600", icon: "🔮", agentType: "tantan" },
-  { name: "伴伴", role: "成长陪伴师", gradient: "from-amber-500 to-orange-600", icon: "🤝", agentType: "banban" },
+  { name: "学学", role: "学习策略师", gradient: "from-blue-500 to-indigo-600", avatar: "/agents/xuexue.png", agentType: "xuexue" },
+  { name: "创创", role: "创造引导师", gradient: "from-emerald-500 to-teal-600", avatar: "/agents/chuangchuang.png", agentType: "chuangchuang" },
+  { name: "探探", role: "天赋测评师", gradient: "from-violet-500 to-purple-600", avatar: "/agents/tantan.png", agentType: "tantan" },
+  { name: "伴伴", role: "成长陪伴师", gradient: "from-amber-500 to-orange-600", avatar: "/agents/banban.png", agentType: "banban" },
 ];
 
 export default function ChatListPage() {
@@ -27,8 +27,12 @@ export default function ChatListPage() {
               <Link href={`/chat/${agent.agentType}`}>
                 <Card className="border-0 shadow-md hover:shadow-lg transition-all duration-300 active:scale-[0.98]">
                   <CardContent className="p-4 flex items-center gap-4">
-                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${agent.gradient} flex items-center justify-center text-xl shadow-sm`}>
-                      {agent.icon}
+                    <div className={`h-14 w-14 rounded-2xl bg-gradient-to-br ${agent.gradient} p-0.5 shadow-sm`}>
+                      <img
+                        src={agent.avatar}
+                        alt={agent.name}
+                        className="h-full w-full rounded-[14px] object-cover"
+                      />
                     </div>
                     <div className="flex-1">
                       <h3 className="font-semibold text-foreground">{agent.name}</h3>

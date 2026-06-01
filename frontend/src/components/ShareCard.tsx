@@ -8,7 +8,7 @@ interface ShareCardProps {
   onClose: () => void;
   agentName: string;
   agentRole: string;
-  agentIcon: string;
+  agentAvatar: string;
   gradient: string;
   question: string;
   answer: string;
@@ -19,7 +19,7 @@ export default function ShareCard({
   onClose,
   agentName,
   agentRole,
-  agentIcon,
+  agentAvatar,
   gradient,
   question,
   answer,
@@ -103,7 +103,11 @@ export default function ShareCard({
               {/* 顶部 */}
               <div style={{ background: "linear-gradient(135deg, #C4A77D, #8B7355)", padding: "16px 20px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ fontSize: "24px" }}>{agentIcon}</span>
+                  <img
+                    src={agentAvatar}
+                    alt={agentName}
+                    style={{ width: "34px", height: "34px", borderRadius: "999px", objectFit: "cover", border: "1px solid rgba(255,255,255,0.55)" }}
+                  />
                   <div>
                     <p style={{ color: "#fff", fontWeight: "bold", fontSize: "14px", margin: 0 }}>{agentName}</p>
                     <p style={{ color: "rgba(255,255,255,0.7)", fontSize: "12px", margin: 0 }}>{agentRole}</p>

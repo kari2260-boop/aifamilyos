@@ -8,11 +8,11 @@ import AuthGuard from "@/components/AuthGuard";
 import ShareCard from "@/components/ShareCard";
 import { api } from "@/lib/api";
 
-const agentInfo: Record<string, { name: string; role: string; gradient: string; icon: string; suggestions: string[] }> = {
-  xuexue: { name: "学学", role: "学习策略师", gradient: "from-blue-500 to-indigo-600", icon: "📚", suggestions: ["孩子背了很多遍还是记不住，怎么办？", "孩子写作业总是拖到很晚，有什么方法？", "怎么帮孩子找到自己的学习节奏？"] },
-  chuangchuang: { name: "创创", role: "创造引导师", gradient: "from-emerald-500 to-teal-600", icon: "🎨", suggestions: ["孩子喜欢拆东西，怎么引导？", "有什么适合孩子的创作项目，能做出真实作品？", "孩子有想法但不知道怎么开始，怎么帮他？"] },
-  tantan: { name: "探探", role: "天赋发现师", gradient: "from-violet-500 to-purple-600", icon: "🔮", suggestions: ["孩子什么都想学但坚持不了，是没天赋吗？", "怎么从日常行为里发现孩子的天赋方向？", "孩子喜欢的事和擅长的事不一样，怎么看？"] },
-  banban: { name: "伴伴", role: "成长陪伴师", gradient: "from-amber-500 to-orange-600", icon: "🤝", suggestions: ["孩子不愿意和我说话，我说什么都是错的", "青春期孩子越来越叛逆，我不知道怎么办了", "我已经很努力了，但孩子还是不理解我"] },
+const agentInfo: Record<string, { name: string; role: string; gradient: string; avatar: string; suggestions: string[] }> = {
+  xuexue: { name: "学学", role: "学习策略师", gradient: "from-blue-500 to-indigo-600", avatar: "/agents/xuexue.png", suggestions: ["孩子背了很多遍还是记不住，怎么办？", "孩子写作业总是拖到很晚，有什么方法？", "怎么帮孩子找到自己的学习节奏？"] },
+  chuangchuang: { name: "创创", role: "创造引导师", gradient: "from-emerald-500 to-teal-600", avatar: "/agents/chuangchuang.png", suggestions: ["孩子喜欢拆东西，怎么引导？", "有什么适合孩子的创作项目，能做出真实作品？", "孩子有想法但不知道怎么开始，怎么帮他？"] },
+  tantan: { name: "探探", role: "天赋发现师", gradient: "from-violet-500 to-purple-600", avatar: "/agents/tantan.png", suggestions: ["孩子什么都想学但坚持不了，是没天赋吗？", "怎么从日常行为里发现孩子的天赋方向？", "孩子喜欢的事和擅长的事不一样，怎么看？"] },
+  banban: { name: "伴伴", role: "成长陪伴师", gradient: "from-amber-500 to-orange-600", avatar: "/agents/banban.png", suggestions: ["孩子不愿意和我说话，我说什么都是错的", "青春期孩子越来越叛逆，我不知道怎么办了", "我已经很努力了，但孩子还是不理解我"] },
 };
 
 interface ChatMessage {
@@ -253,8 +253,12 @@ export default function ChatPage() {
             <button onClick={() => router.back()} className="text-muted-foreground text-xl hover:text-foreground transition">
               ‹
             </button>
-            <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${agent.gradient} flex items-center justify-center text-base shadow-sm`}>
-              {agent.icon}
+            <div className={`h-10 w-10 rounded-xl bg-gradient-to-br ${agent.gradient} p-0.5 shadow-sm`}>
+              <img
+                src={agent.avatar}
+                alt={agent.name}
+                className="h-full w-full rounded-[10px] object-cover"
+              />
             </div>
             <div className="flex-1">
               <h2 className="font-semibold text-foreground text-sm">{agent.name}</h2>
@@ -491,7 +495,7 @@ export default function ChatPage() {
         onClose={() => setShareVisible(false)}
         agentName={agent.name}
         agentRole={agent.role}
-        agentIcon={agent.icon}
+        agentAvatar={agent.avatar}
         gradient={agent.gradient}
         question={shareQuestion}
         answer={shareAnswer}
