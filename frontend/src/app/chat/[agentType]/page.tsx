@@ -9,10 +9,10 @@ import ShareCard from "@/components/ShareCard";
 import { api } from "@/lib/api";
 
 const agentInfo: Record<string, { name: string; role: string; gradient: string; icon: string; suggestions: string[] }> = {
-  xuexue: { name: "学学", role: "学习策略师", gradient: "from-blue-500 to-indigo-600", icon: "📚", suggestions: ["孩子写作业总是拖延怎么办？", "如何提高数学成绩？", "怎样培养自主学习习惯？"] },
-  chuangchuang: { name: "创创", role: "创造引导师", gradient: "from-emerald-500 to-teal-600", icon: "🎨", suggestions: ["孩子对编程感兴趣，怎么开始？", "有什么适合小学生的创作项目？", "如何把兴趣变成作品？"] },
-  tantan: { name: "探探", role: "天赋测评师", gradient: "from-violet-500 to-purple-600", icon: "🔮", suggestions: ["怎么发现孩子的天赋？", "孩子什么都想学但坚持不了", "如何判断兴趣班是否适合？"] },
-  banban: { name: "伴伴", role: "成长陪伴师", gradient: "from-amber-500 to-orange-600", icon: "🤝", suggestions: ["孩子不愿意和我沟通怎么办？", "青春期叛逆如何应对？", "怎样表扬孩子更有效？"] },
+  xuexue: { name: "学学", role: "学习策略师", gradient: "from-blue-500 to-indigo-600", icon: "📚", suggestions: ["孩子背了很多遍还是记不住，怎么办？", "孩子写作业总是拖到很晚，有什么方法？", "怎么帮孩子找到自己的学习节奏？"] },
+  chuangchuang: { name: "创创", role: "创造引导师", gradient: "from-emerald-500 to-teal-600", icon: "🎨", suggestions: ["孩子喜欢拆东西，怎么引导？", "有什么适合孩子的创作项目，能做出真实作品？", "孩子有想法但不知道怎么开始，怎么帮他？"] },
+  tantan: { name: "探探", role: "天赋发现师", gradient: "from-violet-500 to-purple-600", icon: "🔮", suggestions: ["孩子什么都想学但坚持不了，是没天赋吗？", "怎么从日常行为里发现孩子的天赋方向？", "孩子喜欢的事和擅长的事不一样，怎么看？"] },
+  banban: { name: "伴伴", role: "成长陪伴师", gradient: "from-amber-500 to-orange-600", icon: "🤝", suggestions: ["孩子不愿意和我说话，我说什么都是错的", "青春期孩子越来越叛逆，我不知道怎么办了", "我已经很努力了，但孩子还是不理解我"] },
 };
 
 interface ChatMessage {
