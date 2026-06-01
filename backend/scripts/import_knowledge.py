@@ -54,7 +54,9 @@ def read_file(file_path: Path) -> str:
 
 def iter_supported_files(category_dir: Path):
     for file_path in sorted(category_dir.rglob("*")):
-        if file_path.is_file() and file_path.suffix.lower() in SUPPORTED_EXTENSIONS | {".pdf"}:
+        if (file_path.is_file()
+                and not file_path.name.startswith("._")  # 过滤 macOS 元数据文件
+                and file_path.suffix.lower() in SUPPORTED_EXTENSIONS | {".pdf"}):
             yield file_path
 
 
