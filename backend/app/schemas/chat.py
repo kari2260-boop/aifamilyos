@@ -1,7 +1,14 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Literal
 from uuid import UUID
 from datetime import datetime
+
+
+class Attachment(BaseModel):
+    type: Literal["image", "audio", "file"]
+    url: str
+    name: Optional[str] = None
+    mime: Optional[str] = None
 
 
 class ChatSendRequest(BaseModel):
@@ -9,6 +16,9 @@ class ChatSendRequest(BaseModel):
     message: str
     conversation_id: Optional[UUID] = None  # 为空则新建对话
     child_id: Optional[UUID] = None  # 关联的孩子
+    # 结构化附件：图片/音频/文件，统一进消息管道
+    # 图片附件会先由 vision model 识别成文字摘要，再注入当前智能体上下文。
+    attachments: Optional[List[Attachment]] = None
 
 
 class MessageItem(BaseModel):

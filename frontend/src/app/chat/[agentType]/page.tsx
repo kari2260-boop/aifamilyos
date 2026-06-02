@@ -39,22 +39,39 @@ export default function ChatPage() {
   const [shareQuestion, setShareQuestion] = useState("");
   const [shareAnswer, setShareAnswer] = useState("");
   const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [pendingImages, setPendingImages] = useState<Array<{url: string; name: string}>>([]);
+  const [imageUploading, setImageUploading] = useState(false);
   const [children, setChildren] = useState<{ id: string; name: string }[]>([]);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
-  const startRecording = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setError("您的浏览器不支持语音输入");
-      return;
-    }
+  const isWeChatBrowser = () => /MicroMessenger/i.test(navigator.userAgent || "");
+
+  const getNativeSpeechRecognition = () => {
+    if (typeof window === "undefined" || isWeChatBrowser()) return null;
+    return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  };
+
+  const resolveUploadedUrl = (apiBase: string, url: string) => {
+    if (!url || url.startsWith("http")) return url;
+    if (apiBase.startsWith("http")) return new URL(url, apiBase).toString();
+    return url;
+  };
+
+  const startNativeSpeechRecognition = () => {
+    const SpeechRecognition = getNativeSpeechRecognition();
+    if (!SpeechRecognition) return false;
+
     const recognition = new SpeechRecognition();
     recognition.lang = "zh-CN";
     recognition.continuous = false;
     recognition.interimResults = true;
-
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       let transcript = "";
       for (let i = 0; i < event.results.length; i++) {
@@ -62,25 +79,146 @@ export default function ChatPage() {
       }
       setInput(transcript);
     };
-
     recognition.onend = () => {
       setIsRecording(false);
+      recognitionRef.current = null;
     };
-
     recognition.onerror = () => {
       setIsRecording(false);
+      recognitionRef.current = null;
+      setError("语音识别失败，请重试或直接输入文字");
     };
 
     recognitionRef.current = recognition;
     recognition.start();
     setIsRecording(true);
+    return true;
+  };
+
+  const startMediaRecorder = async () => {
+    try {
+      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+        setError("当前浏览器不支持录音，请复制到系统浏览器打开");
+        return;
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
+      const recorder = new MediaRecorder(stream, { mimeType });
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: mimeType });
+        await uploadAndTranscribe(blob, mimeType);
+      };
+
+      recorder.start(200);
+      mediaRecorderRef.current = recorder;
+      setIsRecording(true);
+      setRecordingSeconds(0);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds((s) => {
+          if (s >= 59) {
+            stopRecording();
+            return 60;
+          }
+          return s + 1;
+        });
+      }, 1000);
+    } catch {
+      setError("无法访问麦克风，请检查权限设置");
+    }
+  };
+
+  const startRecording = async () => {
+    setError("");
+    if (startNativeSpeechRecognition()) return;
+    await startMediaRecorder();
   };
 
   const stopRecording = () => {
     if (recognitionRef.current) {
       recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
     }
     setIsRecording(false);
+    setRecordingSeconds(0);
+  };
+
+  const uploadAndTranscribe = async (blob: Blob, mimeType: string) => {
+    setLoading(true);
+    setError("");
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const apiBase = (await import("@/lib/api")).getApiBase();
+      const formData = new FormData();
+      const ext = mimeType.includes("mp4") ? "mp4" : "webm";
+      formData.append("file", blob, `recording.${ext}`);
+
+      const res = await fetch(`${apiBase}/chat/transcribe`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "转写失败" }));
+        throw new Error(err.detail || "转写失败");
+      }
+
+      const data = await res.json();
+      if (data.text) {
+        setInput((prev) => (prev ? prev + " " + data.text : data.text));
+      }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "语音转写失败，请直接输入文字");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageUploading(true);
+    setError("");
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const apiBase = (await import("@/lib/api")).getApiBase();
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch(`${apiBase}/chat/upload-image`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "上传失败" }));
+        throw new Error(err.detail || "上传失败");
+      }
+
+      const data = await res.json();
+      setPendingImages((prev) => [...prev, { url: resolveUploadedUrl(apiBase, data.url), name: file.name }]);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "图片上传失败");
+    } finally {
+      setImageUploading(false);
+      // 清空 input，允许重复选同一张图
+      if (imageInputRef.current) imageInputRef.current.value = "";
+    }
   };
 
   useEffect(() => {
@@ -130,18 +268,27 @@ export default function ChatPage() {
 
   const handleSend = async () => {
     const text = input.trim();
-    if (!text || loading) return;
+    if ((!text && pendingImages.length === 0) || loading) return;
 
     setInput("");
     setError("");
 
+    const displayText = text || "[图片]";
     const userMsg: ChatMessage = {
       id: `user-${Date.now()}`,
       role: "user",
-      content: text,
+      content: displayText,
     };
     setMessages((prev) => [...prev, userMsg]);
     setLoading(true);
+
+    // 构造 attachments
+    const attachments = pendingImages.map((img) => ({
+      type: "image" as const,
+      url: img.url,
+      name: img.name,
+    }));
+    setPendingImages([]); // 发送后清空待发图片
 
     // 先插入一条空的 AI 消息，流式填充内容
     const streamingId = `ai-streaming-${Date.now()}`;
@@ -158,9 +305,10 @@ export default function ChatPage() {
         },
         body: JSON.stringify({
           agent_type: agentType,
-          message: text,
+          message: displayText,
           conversation_id: conversationId || null,
           child_id: selectedChildId || null,
+          ...(attachments.length > 0 ? { attachments } : {}),
         }),
         signal: AbortSignal.timeout(120000),
       });
@@ -454,40 +602,107 @@ export default function ChatPage() {
         </div>
 
         {/* 输入框 */}
-        <div className="bg-card border-t border-border p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex gap-2 shrink-0">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="输入你的问题..."
-            className="flex-1 px-4 py-2.5 bg-muted/50 border border-border rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition"
-            disabled={loading}
-            autoComplete="off"
-          />
+        <div className="bg-card border-t border-border shrink-0">
+          {/* 待发图片预览行 */}
+          {pendingImages.length > 0 && (
+            <div className="flex gap-2 px-3 pt-2 flex-wrap">
+              {pendingImages.map((img, idx) => (
+                <div key={idx} className="relative group">
+                  <img
+                    src={img.url}
+                    alt={img.name}
+                    className="w-16 h-16 object-cover rounded-lg border border-border"
+                  />
+                  <button
+                    onClick={() => setPendingImages((prev) => prev.filter((_, i) => i !== idx))}
+                    className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                    aria-label="移除图片"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex gap-2">
+            {/* 隐藏的图片 input */}
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={handleImageSelect}
+            />
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="输入你的问题..."
+              className="flex-1 px-4 py-2.5 bg-muted/50 border border-border rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition"
+              disabled={loading}
+              autoComplete="off"
+            />
+            {/* 图片上传按钮 */}
+            <button
+              onClick={() => imageInputRef.current?.click()}
+              disabled={loading || imageUploading}
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-muted/50 border border-border text-muted-foreground hover:text-foreground transition"
+              title="上传图片"
+            >
+              {imageUploading ? (
+                <span className="text-xs animate-spin">⏳</span>
+              ) : (
+                <span>📷</span>
+              )}
+            </button>
           <button
-            onClick={isRecording ? stopRecording : startRecording}
+            onClick={() => {
+              if (loading) return;
+              if (getNativeSpeechRecognition()) {
+                if (isRecording) stopRecording();
+                else void startRecording();
+              }
+            }}
+            onPointerDown={(e) => {
+              if (getNativeSpeechRecognition()) return;
+              e.preventDefault();
+              if (!loading) void startRecording();
+            }}
+            onPointerUp={() => {
+              if (!getNativeSpeechRecognition() && isRecording) stopRecording();
+            }}
+            onPointerLeave={() => {
+              if (!getNativeSpeechRecognition() && isRecording) stopRecording();
+            }}
             disabled={loading}
-            className={`w-10 h-10 flex items-center justify-center rounded-full transition ${
+            className={`w-10 h-10 flex items-center justify-center rounded-full transition select-none ${
               isRecording
-                ? "bg-red-500 text-white animate-pulse"
+                ? "bg-red-500 text-white scale-110 shadow-lg"
                 : "bg-muted/50 border border-border text-muted-foreground hover:text-foreground"
             }`}
+            title={getNativeSpeechRecognition() ? "点击语音输入" : (isRecording ? `录音中 ${recordingSeconds}s，松开发送` : "按住说话")}
           >
-            🎤
+            {isRecording ? (
+              <span className="text-xs font-bold">{recordingSeconds}s</span>
+            ) : (
+              <span>🎤</span>
+            )}
           </button>
           <button
             onClick={handleSend}
-            disabled={loading || !input.trim()}
+            disabled={loading || (!input.trim() && pendingImages.length === 0)}
             className={`px-4 py-2.5 rounded-full text-sm text-white font-medium transition ${
-              loading || !input.trim()
+              loading || (!input.trim() && pendingImages.length === 0)
                 ? "bg-muted-foreground/30"
                 : "bg-gradient-to-r from-amber-500 to-orange-600 active:scale-95 shadow-sm"
             }`}
           >
             发送
           </button>
-        </div>
+          </div>  {/* end flex gap-2 */}
+        </div>  {/* end bg-card */}
       </div>
 
       <ShareCard

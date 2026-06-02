@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     EMBEDDING_API_KEY: str = ""
     EMBEDDING_MODEL: str = "text-embedding-v3"
 
+    # Vision model (Qwen-VL via DashScope OpenAI-compatible API)
+    VISION_MODEL_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    VISION_MODEL_API_KEY: str = ""
+    VISION_MODEL_NAME: str = "qwen-vl-plus"
+
     class Config:
         env_file = ".env"
 

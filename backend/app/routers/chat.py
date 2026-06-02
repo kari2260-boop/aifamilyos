@@ -1,14 +1,16 @@
 """
 Chat Router - 对话接口
-POST /chat/send    发送消息并获取AI回复（非流式，兼容旧版）
-POST /chat/stream  发送消息并流式返回AI回复（SSE）
+POST /chat/send        发送消息并获取AI回复（非流式，兼容旧版）
+POST /chat/stream      发送消息并流式返回AI回复（SSE）
+POST /chat/transcribe  语音文件转文字（微信H5录音上传）
+POST /chat/upload-image 用户上传图片（进消息管道）
 GET  /chat/conversations  获取对话列表
 GET  /chat/conversations/{id}/messages  获取对话历史
 """
 from uuid import UUID
 from typing import List
 import json
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -19,17 +21,43 @@ from app.utils.auth import get_current_user
 from app.models.models import User, Family, Conversation, Message, UsageLog, RiskFlag, ChildProfile, GrowthTag
 from app.schemas.chat import (
     ChatSendRequest, ChatSendResponse,
-    ConversationListItem, MessageItem,
+    ConversationListItem, MessageItem, Attachment,
 )
+from typing import List as TypingList
 from app.services.llm_service import chat_completion, chat_completion_stream
 from app.services.agent_prompts import get_agent_prompt
 from app.services.rag_service import retrieve_context
 from app.services.safety_service import check_risk, CRISIS_RESPONSE
 from app.services.profile_update_service import maybe_update_profile
+from app.services.vision_service import describe_image
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 VALID_AGENTS = {"xuexue", "chuangchuang", "tantan", "banban"}
+
+
+async def build_attachment_context(attachments: TypingList[Attachment]) -> str:
+    """
+    把结构化附件转成文字描述，注入 user message。
+    图片会先调用视觉模型生成摘要，再交给当前文本智能体继续回答。
+    """
+    if not attachments:
+        return ""
+    lines = []
+    for att in attachments:
+        if att.type == "image":
+            name_hint = f"（{att.name}）" if att.name else ""
+            image_summary = await describe_image(att.url, att.name)
+            lines.append(
+                f"[用户上传了图片{name_hint}，URL：{att.url}]\n"
+                f"图片识别结果：\n{image_summary}"
+            )
+        elif att.type == "audio":
+            lines.append(f"[用户上传了语音文件，URL：{att.url}]")
+        elif att.type == "file":
+            name_hint = f"（{att.name}）" if att.name else ""
+            lines.append(f"[用户上传了文件{name_hint}，URL：{att.url}]")
+    return "\n".join(lines)
 
 
 def build_child_context(child_id, family_id: str, db: Session) -> str:
@@ -217,8 +245,14 @@ async def send_message(
 
     for msg in history[-20:]:  # 最多取最近20条
         messages.append({"role": msg.role, "content": msg.content})
-    # 加上当前用户消息
-    messages.append({"role": "user", "content": req.message})
+
+    # 构造当前用户消息：文本 + 附件描述
+    user_content = req.message
+    if req.attachments:
+        attachment_desc = await build_attachment_context(req.attachments)
+        user_content = f"{req.message}\n\n{attachment_desc}"
+
+    messages.append({"role": "user", "content": user_content})
 
     # 调用大模型
     reply_content, tokens_in, tokens_out, model_used = await chat_completion(messages)
@@ -380,7 +414,14 @@ async def stream_message(
     messages = [{"role": "system", "content": system_prompt}]
     for msg in history[-20:]:
         messages.append({"role": msg.role, "content": msg.content})
-    messages.append({"role": "user", "content": req.message})
+
+    # 构造当前用户消息：文本 + 附件描述
+    user_content = req.message
+    if req.attachments:
+        attachment_desc = await build_attachment_context(req.attachments)
+        user_content = f"{req.message}\n\n{attachment_desc}"
+
+    messages.append({"role": "user", "content": user_content})
 
     risk_level, risk_type = check_risk(req.message)
 
@@ -613,3 +654,75 @@ def delete_message(
     db.delete(message)
     db.commit()
     return {"status": "ok"}
+
+
+@router.post("/transcribe")
+async def transcribe_audio_to_text(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    微信 H5 语音转文字接口
+    接收音频文件（webm/mp3/wav），调用 DashScope 转写，返回文本
+    """
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="文件名为空")
+
+    # 读取音频内容
+    audio_bytes = await file.read()
+    if len(audio_bytes) == 0:
+        raise HTTPException(status_code=400, detail="音频文件为空")
+
+    # 限制大小（10MB）
+    MAX_AUDIO_SIZE = 10 * 1024 * 1024
+    if len(audio_bytes) > MAX_AUDIO_SIZE:
+        raise HTTPException(status_code=400, detail="音频文件超过10MB限制")
+
+    # 调用转写服务
+    from app.services.transcribe_service import transcribe_audio
+    try:
+        text = await transcribe_audio(audio_bytes, file.content_type or "audio/webm")
+        return {"text": text, "status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"语音转写失败: {str(e)}")
+
+
+@router.post("/upload-image")
+async def upload_chat_image(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    用户上传图片进入 chat 消息管道（微信 H5 拍照/相册）
+    注意：当前版本只做上传留痕，LLM 为纯文本模型，不直接理解图片内容
+    后续接入多模态模型时，此接口返回的 URL 可直接作为 image_url 传给模型
+    """
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="文件名为空")
+
+    ALLOWED_IMAGE_TYPES = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic"}
+    MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10MB
+
+    import os, uuid
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail=f"不支持的图片格式: {ext}")
+
+    content = await file.read()
+    if len(content) > MAX_IMAGE_SIZE:
+        raise HTTPException(status_code=400, detail="图片超过10MB限制")
+
+    IMAGE_DIR = "/app/uploads/images"
+    os.makedirs(IMAGE_DIR, exist_ok=True)
+    filename = f"{uuid.uuid4().hex}{ext}"
+    filepath = os.path.join(IMAGE_DIR, filename)
+
+    with open(filepath, "wb") as f:
+        f.write(content)
+
+    return {
+        "url": f"/api/static/images/{filename}",
+        "filename": filename,
+        "size": len(content),
+        "original_name": file.filename,
+    }

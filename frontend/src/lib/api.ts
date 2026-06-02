@@ -129,13 +129,14 @@ class ApiClient {
   }
 
   // 对话
-  async chatSend(agentType: string, message: string, conversationId?: string) {
+  async chatSend(agentType: string, message: string, conversationId?: string, attachments?: Array<{type: string; url: string; name?: string; mime?: string}>) {
     return this.request("/chat/send", {
       method: "POST",
       body: JSON.stringify({
         agent_type: agentType,
         message,
         conversation_id: conversationId || null,
+        attachments: attachments || null,
       }),
     }, CHAT_TIMEOUT_MS);
   }
