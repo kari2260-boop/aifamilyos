@@ -97,19 +97,21 @@ export default function Home() {
           {/* AI 智能体入口 */}
           <div className="mt-6 grid grid-cols-2 gap-3">
             {agents.map((agent, i) => (
-              <BlurFade key={agent.agentType} delay={0.1 + i * 0.06}>
+              <BlurFade key={agent.agentType} delay={0.1 + i * 0.06} className={i === agents.length - 1 && agents.length % 2 !== 0 ? "col-span-2" : ""}>
                 <Link href={`/chat/${agent.agentType}`}>
-                  <div className="bg-card rounded-2xl shadow-sm p-4 transition-all hover:shadow-md active:scale-[0.97]">
+                  <div className={`bg-card rounded-2xl shadow-sm p-4 transition-all hover:shadow-md active:scale-[0.97] ${i === agents.length - 1 && agents.length % 2 !== 0 ? "flex items-center gap-4" : ""}`}>
                     <img
                       src={agent.avatar}
                       alt={agent.name}
-                      className="mb-2 h-14 w-14 rounded-full border border-primary/20 object-cover shadow-sm"
+                      className={`rounded-full border border-primary/20 object-cover shadow-sm ${i === agents.length - 1 && agents.length % 2 !== 0 ? "h-16 w-16 shrink-0" : "mb-2 h-14 w-14"}`}
                     />
-                    <h3 className="font-semibold text-foreground text-sm">{agent.name}</h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">{agent.role}</p>
-                    <p className="text-xs text-muted-foreground/70 mt-2 leading-relaxed">
-                      {agent.description}
-                    </p>
+                    <div>
+                      <h3 className="font-semibold text-foreground text-sm">{agent.name}</h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">{agent.role}</p>
+                      <p className="text-xs text-muted-foreground/70 mt-2 leading-relaxed">
+                        {agent.description}
+                      </p>
+                    </div>
                   </div>
                 </Link>
               </BlurFade>
