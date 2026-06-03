@@ -13,6 +13,7 @@ const agentInfo: Record<string, { name: string; role: string; gradient: string; 
   chuangchuang: { name: "创创", role: "创造引导师", gradient: "from-emerald-500 to-teal-600", avatar: "/agents/chuangchuang.png", suggestions: ["孩子喜欢拆东西，怎么引导？", "有什么适合孩子的创作项目，能做出真实作品？", "孩子有想法但不知道怎么开始，怎么帮他？"] },
   tantan: { name: "探探", role: "天赋发现师", gradient: "from-violet-500 to-purple-600", avatar: "/agents/tantan.png", suggestions: ["孩子什么都想学但坚持不了，是没天赋吗？", "怎么从日常行为里发现孩子的天赋方向？", "孩子喜欢的事和擅长的事不一样，怎么看？"] },
   banban: { name: "伴伴", role: "成长陪伴师", gradient: "from-amber-500 to-orange-600", avatar: "/agents/banban.png", suggestions: ["孩子不愿意和我说话，我说什么都是错的", "青春期孩子越来越叛逆，我不知道怎么办了", "我已经很努力了，但孩子还是不理解我"] },
+  shuashua: { name: "刷刷", role: "真题训练与错题复盘", gradient: "from-rose-500 to-pink-600", avatar: "/agents/shuashua.png", suggestions: ["上传一道错题，帮我分析", "这类题总是做错，怎么突破？", "给我出几道类似的练习题"] },
 };
 
 interface ChatMessage {

@@ -35,6 +35,13 @@ const agents = [
     avatar: "/agents/banban.png",
     agentType: "banban",
   },
+  {
+    name: "刷刷",
+    role: "真题训练与错题复盘",
+    description: "题海战术受害者，现在帮孩子把错题变成学习资产",
+    avatar: "/agents/shuashua.png",
+    agentType: "shuashua",
+  },
 ];
 
 export default function Home() {
@@ -77,7 +84,7 @@ export default function Home() {
             </p>
             <div className="mt-4 flex items-center gap-2">
               <span className="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-xs text-white">
-                4位AI导师
+                5位AI导师
               </span>
               <span className="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-xs text-white">
                 持续更新

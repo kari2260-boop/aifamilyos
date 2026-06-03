@@ -10,6 +10,7 @@ const agents = [
   { name: "创创", role: "创造引导师", gradient: "from-emerald-500 to-teal-600", avatar: "/agents/chuangchuang.png", agentType: "chuangchuang" },
   { name: "探探", role: "天赋测评师", gradient: "from-violet-500 to-purple-600", avatar: "/agents/tantan.png", agentType: "tantan" },
   { name: "伴伴", role: "成长陪伴师", gradient: "from-amber-500 to-orange-600", avatar: "/agents/banban.png", agentType: "banban" },
+  { name: "刷刷", role: "真题训练与错题复盘", gradient: "from-rose-500 to-pink-600", avatar: "/agents/shuashua.png", agentType: "shuashua" },
 ];
 
 export default function ChatListPage() {

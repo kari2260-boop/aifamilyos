@@ -33,7 +33,7 @@ from app.services.vision_service import describe_image
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
-VALID_AGENTS = {"xuexue", "chuangchuang", "tantan", "banban"}
+VALID_AGENTS = {"xuexue", "chuangchuang", "tantan", "banban", "shuashua"}
 
 
 async def build_attachment_context(attachments: TypingList[Attachment]) -> str:
@@ -222,6 +222,7 @@ async def send_message(
         "chuangchuang": "project",
         "tantan": "talent",
         "banban": "parenting",
+        "shuashua": "learning",  # 刷刷用 learning 知识库（真题、课本、考点）
     }
     category = agent_category_map.get(req.agent_type)
     (rag_context, retrieved_chunks), (global_context, global_chunks), (product_context, product_chunks) = await asyncio.gather(
@@ -392,6 +393,7 @@ async def stream_message(
         "chuangchuang": "project",
         "tantan": "talent",
         "banban": "parenting",
+        "shuashua": "learning",  # 刷刷用 learning 知识库（真题、课本、考点）
     }
     category = agent_category_map.get(req.agent_type)
     (rag_context, retrieved_chunks), (global_context, global_chunks), (product_context, product_chunks) = await asyncio.gather(
