@@ -187,6 +187,11 @@ export default function ProfilePage() {
           {/* 快捷入口 */}
           <BlurFade delay={0.1}>
             <div className="mt-6 grid grid-cols-2 gap-3">
+              <button onClick={() => router.push("/wrong-questions")} className="bg-card rounded-2xl shadow-sm p-4 text-left transition-all hover:shadow-md">
+                <span className="text-2xl">📚</span>
+                <p className="text-sm font-medium text-foreground mt-2">错题本</p>
+                <p className="text-xs text-muted-foreground mt-0.5">错题复盘与巩固</p>
+              </button>
               <button onClick={() => router.push("/reports")} className="bg-card rounded-2xl shadow-sm p-4 text-left transition-all hover:shadow-md">
                 <span className="text-2xl">🌱</span>
                 <p className="text-sm font-medium text-foreground mt-2">成长报告</p>

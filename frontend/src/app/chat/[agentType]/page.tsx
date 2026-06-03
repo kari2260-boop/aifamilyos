@@ -413,6 +413,11 @@ export default function ChatPage() {
               <h2 className="font-semibold text-foreground text-sm">{agent.name}</h2>
               <p className="text-xs text-muted-foreground">{agent.role}</p>
             </div>
+            {agentType === "shuashua" && (
+              <Link href="/wrong-questions" className="text-xs px-3 py-1.5 bg-rose-100 text-rose-700 rounded-full">
+                📚 错题本
+              </Link>
+            )}
             {remainingQuota !== null && (
               <Link href="/subscribe" className={`text-xs px-2 py-1 rounded-full ${remainingQuota <= 5 ? "bg-red-100 text-red-600" : "bg-muted text-muted-foreground"}`}>
                 剩余 {remainingQuota} 次
