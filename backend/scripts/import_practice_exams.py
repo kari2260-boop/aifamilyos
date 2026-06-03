@@ -22,10 +22,12 @@ import argparse
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app.database import SessionLocal
-from app.models.knowledge import KnowledgeDocument
-from app.services.rag_service import generate_embeddings_batch
+from app.models.models import KnowledgeDoc, KnowledgeChunk
+from app.services.embedding_service import get_embeddings
+from app.services.text_splitter import split_text
 from datetime import datetime
 import uuid
+import asyncio
 
 
 # 学科映射（目录名 -> 标准学科名）
@@ -213,60 +215,88 @@ def import_subject(
     # 写入数据库
     if not dry_run and documents_to_import:
         print(f"\n💾 准备写入数据库：{len(documents_to_import)} 个文档")
-
-        db = SessionLocal()
-        try:
-            # 批量生成 embedding（每次100个）
-            batch_size = 100
-            for i in range(0, len(documents_to_import), batch_size):
-                batch = documents_to_import[i:i+batch_size]
-                print(f"📊 生成 embedding：{i+1}-{min(i+batch_size, len(documents_to_import))}/{len(documents_to_import)}")
-
-                # 生成 embedding
-                texts = [doc["content"] for doc in batch]
-                try:
-                    embeddings = generate_embeddings_batch(texts)
-                except Exception as e:
-                    print(f"❌ embedding 生成失败: {e}")
-                    stats["error"] += len(batch)
-                    continue
-
-                # 写入数据库
-                for doc_data, embedding in zip(batch, embeddings):
-                    try:
-                        doc = KnowledgeDocument(
-                            id=uuid.uuid4(),
-                            title=doc_data["title"],
-                            content=doc_data["content"],
-                            category=doc_data["category"],
-                            metadata={
-                                "subject": doc_data["subject"],
-                                "year": doc_data["year"],
-                                "region": doc_data["region"],
-                                "exam_type": doc_data["exam_type"],
-                                "source_file": doc_data["source_file"],
-                                "file_size": doc_data["file_size"],
-                                "source_type": "exam_paper",
-                            },
-                            embedding=embedding,
-                            created_at=datetime.utcnow(),
-                        )
-                        db.add(doc)
-                        stats["success"] += 1
-                    except Exception as e:
-                        print(f"❌ 写入失败 {doc_data['title']}: {e}")
-                        stats["error"] += 1
-
-                db.commit()
-                print(f"✅ 已保存 {stats['success']} 个文档")
-
-        finally:
-            db.close()
+        asyncio.run(_import_to_db(documents_to_import, stats))
     elif dry_run:
-        print(f"\n🧪 【试运行模式】将导入 {len(documents_to_import)} 个文档")
+        # 试运行：只预览分块数量
+        total_chunks = 0
+        for doc_data in documents_to_import:
+            chunks = split_text(doc_data["content"])
+            total_chunks += len(chunks)
+            print(f"  📄 {doc_data['title'][:50]} → {len(chunks)} 个分块")
+        print(f"\n🧪 【试运行模式】将导入 {len(documents_to_import)} 个文档，共 {total_chunks} 个分块")
         stats["success"] = len(documents_to_import)
 
     return stats
+
+
+async def _import_to_db(documents_to_import: list, stats: dict):
+    """将文档批量写入数据库（doc + chunks + embeddings）"""
+    db = SessionLocal()
+    try:
+        for i, doc_data in enumerate(documents_to_import, 1):
+            print(f"\n[{i}/{len(documents_to_import)}] 导入：{doc_data['title'][:50]}")
+
+            try:
+                # 1. 创建 KnowledgeDoc 记录
+                doc = KnowledgeDoc(
+                    id=uuid.uuid4(),
+                    title=doc_data["title"],
+                    category="practice",
+                    source_type="md",
+                    file_path=doc_data["source_file"],
+                    raw_text=doc_data["content"],
+                    status="processing",
+                    created_at=datetime.utcnow(),
+                )
+                db.add(doc)
+                db.flush()  # 获取 doc.id
+
+                # 2. 分块
+                chunks_text = split_text(doc_data["content"])
+                if not chunks_text:
+                    doc.status = "completed"
+                    db.commit()
+                    print(f"   ⏭️ 内容为空，跳过")
+                    stats["skip"] += 1
+                    continue
+
+                print(f"   ✂️  分块：{len(chunks_text)} 个")
+
+                # 3. 分批生成 embeddings（DashScope 限制每次最多 25 个）
+                BATCH_SIZE = 25
+                all_embeddings = []
+                for batch_idx in range(0, len(chunks_text), BATCH_SIZE):
+                    batch_texts = chunks_text[batch_idx:batch_idx + BATCH_SIZE]
+                    batch_embeddings = await get_embeddings(batch_texts)
+                    all_embeddings.extend(batch_embeddings)
+                    print(f"   🧮 Embedding 批次 {batch_idx//BATCH_SIZE + 1}/{(len(chunks_text)-1)//BATCH_SIZE + 1} 完成")
+
+                print(f"   ✅ 全部 Embedding 生成完成（{len(all_embeddings)} 个）")
+
+                # 4. 存入 KnowledgeChunk
+                for idx, (chunk_text, embedding) in enumerate(zip(chunks_text, all_embeddings)):
+                    chunk = KnowledgeChunk(
+                        id=uuid.uuid4(),
+                        doc_id=doc.id,
+                        chunk_index=idx,
+                        content=chunk_text,
+                        category="practice",
+                        embedding=embedding,
+                    )
+                    db.add(chunk)
+
+                doc.status = "completed"
+                db.commit()
+                print(f"   ✅ 保存成功（{len(chunks_text)} 个分块）")
+                stats["success"] += 1
+
+            except Exception as e:
+                db.rollback()
+                print(f"   ❌ 导入失败：{e}")
+                stats["error"] += 1
+
+    finally:
+        db.close()
 
 
 def main():
