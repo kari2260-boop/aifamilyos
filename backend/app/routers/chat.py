@@ -516,6 +516,39 @@ async def stream_message(
 
             asyncio.create_task(update_profile_with_new_session())
 
+        # P2：刷刷对话自动抽取错题并保存（fire-and-forget）
+        if req.agent_type == "shuashua":
+            async def extract_wrong_question_with_new_session():
+                from app.database import SessionLocal
+                from app.services.wrong_question_service import extract_and_save_wrong_question
+                wq_db = SessionLocal()
+                try:
+                    # 提取图片 URL（如果有）
+                    img_url = None
+                    if req.attachments:
+                        for att in req.attachments:
+                            if att.type == "image":
+                                img_url = att.url
+                                break
+
+                    await extract_and_save_wrong_question(
+                        db=wq_db,
+                        conversation_id=_conversation_id,
+                        user_message=req.message,
+                        assistant_message=full_reply,
+                        user_message_id=_user_msg_id,
+                        assistant_message_id=ai_msg_id,
+                        family_id=_family_id,
+                        child_id=_child_id_for_update,
+                        image_url=img_url
+                    )
+                except Exception as e:
+                    print(f"[错题自动抽取] 失败: {e}")
+                finally:
+                    wq_db.close()
+
+            asyncio.create_task(extract_wrong_question_with_new_session())
+
         # 发送结束信号，携带消息ID和剩余配额
         yield f"data: {json.dumps({'done': True, 'ai_message_id': ai_msg_id, 'remaining_quota': None if quota is None else max(0, quota - used - 1)}, ensure_ascii=False)}\n\n"
 

@@ -9,7 +9,7 @@ from datetime import datetime
 from collections import Counter
 
 from app.database import get_db
-from app.dependencies import get_current_user_family
+from app.utils.auth import get_current_user
 from app.models.models import User, Family, WrongQuestion, ChildProfile
 from app.schemas.wrong_question import (
     WrongQuestionCreate, WrongQuestionUpdate, WrongQuestionItem,
@@ -20,16 +20,21 @@ from app.services.llm_service import chat_completion
 router = APIRouter(prefix="/wrong-questions", tags=["wrong-questions"])
 
 
+def _get_family(user: User, db: Session) -> Family:
+    family = db.query(Family).filter(Family.owner_user_id == user.id).first()
+    if not family:
+        raise HTTPException(status_code=404, detail="未找到家庭档案")
+    return family
+
+
 @router.post("", response_model=WrongQuestionDetail)
 async def create_wrong_question(
     req: WrongQuestionCreate,
-    user: User = Depends(get_current_user_family),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """创建错题记录（刷刷对话后自动调用）"""
-    family = user.family
-    if not family:
-        raise HTTPException(status_code=404, detail="未找到家庭档案")
+    family = _get_family(current_user, db)
 
     # 验证 child_id（如果提供）
     if req.child_id:
@@ -68,13 +73,11 @@ async def list_wrong_questions(
     status: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
-    user: User = Depends(get_current_user_family),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """获取错题列表"""
-    family = user.family
-    if not family:
-        raise HTTPException(status_code=404, detail="未找到家庭档案")
+    family = _get_family(current_user, db)
 
     query = db.query(WrongQuestion).filter(WrongQuestion.family_id == family.id)
 
@@ -93,13 +96,11 @@ async def list_wrong_questions(
 @router.get("/{wrong_question_id}", response_model=WrongQuestionDetail)
 async def get_wrong_question(
     wrong_question_id: UUID,
-    user: User = Depends(get_current_user_family),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """获取错题详情"""
-    family = user.family
-    if not family:
-        raise HTTPException(status_code=404, detail="未找到家庭档案")
+    family = _get_family(current_user, db)
 
     wrong_q = db.query(WrongQuestion).filter(
         WrongQuestion.id == wrong_question_id,
@@ -115,13 +116,11 @@ async def get_wrong_question(
 async def update_wrong_question(
     wrong_question_id: UUID,
     req: WrongQuestionUpdate,
-    user: User = Depends(get_current_user_family),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """更新错题记录（标记掌握、修改学科等）"""
-    family = user.family
-    if not family:
-        raise HTTPException(status_code=404, detail="未找到家庭档案")
+    family = _get_family(current_user, db)
 
     wrong_q = db.query(WrongQuestion).filter(
         WrongQuestion.id == wrong_question_id,
@@ -150,13 +149,11 @@ async def update_wrong_question(
 @router.delete("/{wrong_question_id}")
 async def delete_wrong_question(
     wrong_question_id: UUID,
-    user: User = Depends(get_current_user_family),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """删除错题记录"""
-    family = user.family
-    if not family:
-        raise HTTPException(status_code=404, detail="未找到家庭档案")
+    family = _get_family(current_user, db)
 
     wrong_q = db.query(WrongQuestion).filter(
         WrongQuestion.id == wrong_question_id,
@@ -173,13 +170,11 @@ async def delete_wrong_question(
 @router.post("/summary", response_model=WeaknessSummary)
 async def get_weakness_summary(
     child_id: Optional[UUID] = None,
-    user: User = Depends(get_current_user_family),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """生成薄弱点总结（AI 分析最近错题）"""
-    family = user.family
-    if not family:
-        raise HTTPException(status_code=404, detail="未找到家庭档案")
+    family = _get_family(current_user, db)
 
     query = db.query(WrongQuestion).filter(WrongQuestion.family_id == family.id)
     if child_id:
