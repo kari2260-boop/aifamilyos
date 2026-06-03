@@ -10,7 +10,7 @@ from app.utils.slowapi_compat import (
     slowapi_available,
 )
 from app.init_db import init_db
-from app.routers import auth, family, chat, knowledge, admin, booking, report, subscription, course, article, resource, prompt, assessment, consultation, analytics, upload, course_series
+from app.routers import auth, family, chat, knowledge, admin, booking, report, subscription, course, article, resource, prompt, assessment, consultation, analytics, upload, course_series, wrong_question
 
 
 @asynccontextmanager
@@ -70,6 +70,7 @@ app.include_router(consultation.router, prefix="/api")
 app.include_router(analytics.router, prefix="/api")
 app.include_router(upload.router, prefix="/api")
 app.include_router(course_series.router, prefix="/api")
+app.include_router(wrong_question.router, prefix="/api")
 
 # 静态文件服务（视频/图片），支持 Range 请求（视频快进）
 from fastapi.staticfiles import StaticFiles

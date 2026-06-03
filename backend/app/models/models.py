@@ -371,3 +371,32 @@ class AssessmentReport(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     record = relationship("AssessmentRecord")
+
+
+class WrongQuestion(Base):
+    """错题记录 - 刷刷智能体的错题本"""
+    __tablename__ = "wrong_questions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    family_id = Column(UUID(as_uuid=True), ForeignKey("families.id"), nullable=False, index=True)
+    child_id = Column(UUID(as_uuid=True), ForeignKey("children_profiles.id"), nullable=True, index=True)
+    conversation_id = Column(UUID(as_uuid=True), ForeignKey("conversations.id"), nullable=True, index=True)
+    message_id = Column(UUID(as_uuid=True), ForeignKey("messages.id"), nullable=True)
+
+    # 题目内容
+    subject = Column(String(50), nullable=True)  # 学科：数学/英语/物理/化学等
+    grade = Column(String(20), nullable=True)    # 年级：小学/初中/高中
+    question_text = Column(Text, nullable=True)  # 题目文字
+    image_url = Column(String(500), nullable=True)  # 题目图片
+
+    # AI 分析结果
+    knowledge_points = Column(ARRAY(String), nullable=True)  # 知识点列表
+    mistake_reason = Column(Text, nullable=True)  # 错因分析
+    ai_explanation = Column(Text, nullable=True)  # AI 讲解（完整回答）
+    similar_questions = Column(Text, nullable=True)  # 类似题（AI 生成的练习题）
+
+    # 状态管理
+    status = Column(String(20), default="new")  # new / reviewing / mastered
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
