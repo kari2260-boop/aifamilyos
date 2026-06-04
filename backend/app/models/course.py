@@ -7,7 +7,7 @@ from sqlalchemy import (
     Column, String, Text, Integer, Boolean,
     DateTime, ForeignKey, Enum as SAEnum, text
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -36,13 +36,19 @@ class Course(Base):
     external_url = Column(String(500), nullable=True)  # 视频课程跳转链接（小鹅通等）
     content_markdown = Column(Text, nullable=True)  # 长文课程内容
     tags = Column(JSONB, default=list)
+    category_slugs = Column(ARRAY(String), default=list)  # 多分类标签，如 ['learning', 'project']
     feishu_doc_id = Column(String(100), nullable=True)
     series_id = Column(UUID(as_uuid=True), ForeignKey("course_series.id"), nullable=True, index=True)
     module_id = Column(UUID(as_uuid=True), ForeignKey("course_modules.id"), nullable=True, index=True)
     lesson_order = Column(Integer, default=0)
     duration_minutes = Column(Integer, nullable=True)
     is_published = Column(Boolean, default=False)
-    is_free = Column(Boolean, default=False)  # 是否免费可见
+    is_free = Column(Boolean, default=False)  # 兼容旧字段
+    # minimum_plan: 课程可见的最低会员等级，向上兼容
+    # free     → 所有人可见（9.9 / 3480 / 9800）
+    # community → 3480 和 9800 可见
+    # pilot    → 仅 9800 可见
+    minimum_plan = Column(String(20), nullable=False, default="community")
     recommended_by = Column(String(50), nullable=True)  # "K博士推荐" / "Bing Dad 推荐"
     sort_order = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)

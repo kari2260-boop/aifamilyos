@@ -35,8 +35,10 @@ class CourseResponse(BaseModel):
     content_type: str = "article"
     external_url: Optional[str] = None
     tags: List[str] = []
+    category_slugs: List[str] = []  # 多分类标签
     is_published: bool = False
     is_free: bool = False
+    minimum_plan: str = "community"  # free / community / pilot (最低要求等级)
     recommended_by: Optional[str] = None
     sort_order: int = 0
     created_at: datetime
@@ -59,9 +61,11 @@ class CourseCreate(BaseModel):
     external_url: Optional[str] = None
     content_markdown: Optional[str] = None
     tags: List[str] = []
+    category_slugs: List[str] = []
     feishu_doc_id: Optional[str] = None
     is_published: bool = False
     is_free: bool = False
+    minimum_plan: str = "community"  # free / community / pilot
     recommended_by: Optional[str] = None
     sort_order: int = 0
 
@@ -78,6 +82,7 @@ class CourseUpdate(BaseModel):
     feishu_doc_id: Optional[str] = None
     is_published: Optional[bool] = None
     is_free: Optional[bool] = None
+    minimum_plan: Optional[str] = None  # free / community / pilot
     recommended_by: Optional[str] = None
     sort_order: Optional[int] = None
 

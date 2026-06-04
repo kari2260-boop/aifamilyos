@@ -116,13 +116,38 @@ def list_courses(
     content_type: Optional[str] = Query(None, description="类型筛选: video/article"),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
+    current_user: Optional[User] = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """获取课程列表（已发布的）"""
+    """获取课程列表（根据用户等级过滤，向上兼容）
+    minimum_plan 层级：free(0) ⊆ community(1) ⊆ pilot(2)
+    用户只能看到 minimum_plan <= 用户等级 的课程
+    """
+    from app.models.models import Family
+
+    # 获取用户等级
+    plan_hierarchy = {"free": 0, "trial_9_9": 0, "community_3480": 1, "pilot_9800": 2}
+    min_plan_hierarchy = {"free": 0, "community": 1, "pilot": 2}
+
+    user_level = 0  # 未登录 = 只能看免费
+    if current_user:
+        family = db.query(Family).filter(Family.owner_user_id == current_user.id).first()
+        if family:
+            user_plan = family.subscription_plan or "free"
+            user_level = plan_hierarchy.get(user_plan, 0)
+
+    # 根据用户等级决定可见的 minimum_plan 集合
+    visible_plans = [p for p, lvl in min_plan_hierarchy.items() if lvl <= user_level]
+
     query = db.query(Course).filter(Course.is_published == True)
+    if hasattr(Course, 'minimum_plan'):
+        query = query.filter(Course.minimum_plan.in_(visible_plans))
 
     if category:
-        query = query.join(CourseCategory).filter(CourseCategory.slug == category)
+        # 多分类支持：检查 category_slugs 数组是否包含该 slug
+        from sqlalchemy import cast
+        from sqlalchemy.dialects.postgresql import ARRAY as PG_ARRAY
+        query = query.filter(Course.category_slugs.contains(cast([category], PG_ARRAY(String))))
     if content_type:
         query = query.filter(Course.content_type == content_type)
 

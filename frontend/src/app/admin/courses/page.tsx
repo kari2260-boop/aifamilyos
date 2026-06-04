@@ -11,8 +11,12 @@ interface Course {
   title: string;
   description: string | null;
   category_name: string | null;
+  category_slugs: string[];
   content_type: string;
   is_published: boolean;
+  is_free: boolean;
+  access_level?: string;
+  minimum_plan: string;
   sort_order: number;
   external_url: string | null;
 }
@@ -34,14 +38,27 @@ export default function AdminCoursesPage() {
   const [externalUrl, setExternalUrl] = useState("");
   const [contentMarkdown, setContentMarkdown] = useState("");
   const [category, setCategory] = useState("");
+  const [categorySlugs, setCategorySlugs] = useState<string[]>([]); // 多分类
   const [tags, setTags] = useState("");
   const [sortOrder, setSortOrder] = useState(0);
   const [isPublished, setIsPublished] = useState(true);
   const [isFree, setIsFree] = useState(true);
+  const [minimumPlan, setMinimumPlan] = useState("community"); // free / community / pilot
+  const [categories, setCategories] = useState<Array<{id: string; name: string; slug: string}>>([]);
 
   useEffect(() => {
     loadCourses();
+    loadCategories();
   }, []);
+
+  const loadCategories = async () => {
+    try {
+      const data = await api.getCourseCategories();
+      setCategories(data || []);
+    } catch {
+      /* empty */
+    }
+  };
 
   const loadCourses = async () => {
     try {
@@ -57,7 +74,9 @@ export default function AdminCoursesPage() {
   const resetForm = () => {
     setTitle(""); setDescription(""); setContentType("article");
     setExternalUrl(""); setContentMarkdown(""); setCategory("");
+    setCategorySlugs([]);
     setTags(""); setSortOrder(0); setIsPublished(true); setIsFree(true);
+    setMinimumPlan("community");
   };
 
   const handleCreate = () => { resetForm(); setMode("create"); setEditId(null); };
@@ -75,8 +94,10 @@ export default function AdminCoursesPage() {
     api.getCourse(course.id).then((full) => {
       setContentMarkdown(full.content_markdown || "");
       setCategory(full.category_name || "");
+      setCategorySlugs(full.category_slugs || []);
       setTags((full.tags || []).join(", "));
       setIsFree(full.is_free !== false);
+      setMinimumPlan(full.minimum_plan || "community");
     }).catch(() => {});
   };
 
@@ -92,10 +113,12 @@ export default function AdminCoursesPage() {
       content_markdown: contentMarkdown.trim() || null,
       cover_url: coverInput?.value || null,
       category_name: category.trim() || null,
+      category_slugs: categorySlugs,
       tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
       sort_order: sortOrder,
       is_published: isPublished,
-      is_free: isFree,
+      is_free: minimumPlan === "free",
+      minimum_plan: minimumPlan,
     };
     try {
       if (mode === "create") {
@@ -164,6 +187,9 @@ export default function AdminCoursesPage() {
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-xs text-muted-foreground">{course.content_type === "video" ? "视频" : "文章"}</span>
                           {course.category_name && <span className="text-xs text-primary bg-primary/10 px-1.5 py-0.5 rounded">{course.category_name}</span>}
+                          {course.minimum_plan === "free" && <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">免费</span>}
+                          {course.minimum_plan === "community" && <span className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">3480起</span>}
+                          {course.minimum_plan === "pilot" && <span className="text-xs text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded">9800专属</span>}
                         </div>
                         {course.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{course.description}</p>}
                       </div>
@@ -226,9 +252,37 @@ export default function AdminCoursesPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-foreground">分类</label>
-                  <input className="w-full mt-1 px-4 py-2.5 bg-muted/50 border border-border rounded-xl text-sm" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="如：家庭教育" />
+                  <label className="text-sm font-medium text-foreground">分类标签（多选）</label>
+                  <div className="mt-2 space-y-2 p-3 bg-muted/50 border border-border rounded-xl">
+                    {categories.map((cat) => (
+                      <label key={cat.slug} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={categorySlugs.includes(cat.slug)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setCategorySlugs([...categorySlugs, cat.slug]);
+                            } else {
+                              setCategorySlugs(categorySlugs.filter(s => s !== cat.slug));
+                            }
+                          }}
+                          className="w-4 h-4 rounded border-border"
+                        />
+                        <span className="text-sm">{cat.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">可选多个，用户筛选任意一个标签时都能看到此课程</p>
                 </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground">可见权限（向上兼容）</label>
+                <select className="w-full mt-1 px-4 py-2.5 bg-muted/50 border border-border rounded-xl text-sm" value={minimumPlan} onChange={(e) => setMinimumPlan(e.target.value)}>
+                  <option value="free">免费课程（所有人可见）</option>
+                  <option value="community">社区会员起（3480 / 9800）</option>
+                  <option value="pilot">领航版专属（仅 9800）</option>
+                </select>
+                <p className="text-xs text-muted-foreground mt-1">选"社区会员起"则 3480 和 9800 都能看；选"免费"则所有人都能看</p>
               </div>
               {contentType === "video" && (
                 <div className="space-y-3">
@@ -284,10 +338,6 @@ export default function AdminCoursesPage() {
                   <input className="w-full mt-1 px-4 py-2.5 bg-muted/50 border border-border rounded-xl text-sm" type="number" value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value))} />
                 </div>
               </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={isFree} onChange={(e) => setIsFree(e.target.checked)} className="rounded" />
-                <span className="text-foreground">免费内容</span>
-              </label>
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} className="rounded" />
                 <span className="text-foreground">发布</span>
