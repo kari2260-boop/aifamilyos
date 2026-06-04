@@ -1,7 +1,7 @@
 """add wrong_questions table
 
 Revision ID: 20260603_0001
-Revises: df54139dc760
+Revises: d7dd97bd8ea4
 Create Date: 2026-06-03
 
 """
@@ -11,7 +11,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '20260603_0001'
-down_revision = 'df54139dc760'
+down_revision = 'd7dd97bd8ea4'
 branch_labels = None
 depends_on = None
 
