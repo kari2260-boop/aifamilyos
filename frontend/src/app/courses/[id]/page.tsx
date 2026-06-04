@@ -18,6 +18,7 @@ interface CourseDetail {
   recommended_by: string | null;
   is_free?: boolean;
   locked?: boolean;
+  minimum_plan?: string; // free / community / pilot
 }
 
 export default function CourseDetailPage() {
@@ -26,6 +27,7 @@ export default function CourseDetailPage() {
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [currentPlan, setCurrentPlan] = useState("free");
 
   const isLocked = course?.locked === true || course?.is_free === false;
   const canOpenExternalVideo = course?.content_type === "video" && !!course?.external_url;
@@ -34,6 +36,10 @@ export default function CourseDetailPage() {
     if (params.id) {
       loadCourse(params.id as string);
     }
+    // 获取当前用户套餐
+    api.getCurrentSubscription().then((sub) => {
+      setCurrentPlan(sub?.plan ?? "free");
+    }).catch(() => {});
   }, [params.id]);
 
   async function loadCourse(id: string) {
@@ -179,7 +185,12 @@ export default function CourseDetailPage() {
       </div>
 
       {/* 付费墙弹窗 */}
-      <PaywallModal open={showPaywall} onClose={() => setShowPaywall(false)} />
+      <PaywallModal
+        open={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        currentPlan={currentPlan}
+        requiredPlan={course?.minimum_plan ?? "community"}
+      />
     </div>
   );
 }

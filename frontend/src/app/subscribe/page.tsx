@@ -68,6 +68,20 @@ export default function SubscribePage() {
     setShowContact(true);
   };
 
+  const planHierarchy: Record<string, number> = {
+    free: 0,
+    trial_9_9: 1,
+    community_3480: 2,
+    pilot_9800: 3,
+  };
+
+  const currentLevel = planHierarchy[current?.plan ?? "free"] ?? 0;
+
+  // 只显示比当前等级高的套餐
+  const visiblePlans = plans.filter(p =>
+    p.plan_id !== "free" && (planHierarchy[p.plan_id] ?? 0) > currentLevel
+  );
+
   if (loading) {
     return <AuthGuard><div className="min-h-screen bg-background flex items-center justify-center"><p className="text-muted-foreground">加载中...</p></div></AuthGuard>;
   }
@@ -127,7 +141,7 @@ export default function SubscribePage() {
 
         {/* 套餐列表 */}
         <div className="px-4 mt-4 space-y-3">
-          {plans.filter(p => p.plan_id !== "free").map((plan, i) => {
+          {visiblePlans.map((plan, i) => {
             const isCurrent = plan.plan_id === current?.plan;
             const isPopular = plan.plan_id === "community_3480";
             return (
