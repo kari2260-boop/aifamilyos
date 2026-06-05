@@ -12,6 +12,7 @@ interface Course {
   content_type: string;
   tags: string[];
   is_free: boolean;
+  locked?: boolean;
   recommended_by: string | null;
 }
 
@@ -136,7 +137,7 @@ export default function CoursesPage() {
             {courses.map((course) => (
               <Link key={course.id} href={`/courses/${course.id}`}>
                 <div className="bg-card rounded-2xl shadow-sm p-4 transition-all hover:shadow-md relative">
-                  {!course.is_free && (
+                  {course.locked === true && (
                     <span className="absolute top-3 right-3 text-base">🔒</span>
                   )}
                   <div className="flex gap-4">
