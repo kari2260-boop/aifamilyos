@@ -27,6 +27,7 @@ from typing import List as TypingList
 from app.services.llm_service import chat_completion, chat_completion_stream
 from app.services.agent_prompts import get_agent_prompt
 from app.services.rag_service import retrieve_context
+from app.services.embedding_service import get_embedding
 from app.services.safety_service import check_risk, CRISIS_RESPONSE
 from app.services.profile_update_service import maybe_update_profile
 from app.services.vision_service import describe_image
@@ -34,6 +35,20 @@ from app.services.vision_service import describe_image
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 VALID_AGENTS = {"xuexue", "chuangchuang", "tantan", "banban", "shuashua"}
+
+
+async def retrieve_agent_knowledge(query: str, category: str, db: Session):
+    """Generate one query embedding and reuse it across all knowledge sources."""
+    try:
+        query_embedding = await get_embedding(query)
+    except Exception:
+        query_embedding = []
+
+    return (
+        await retrieve_context(query, category, db, top_k=5, query_embedding=query_embedding),
+        await retrieve_context(query, "global", db, top_k=2, query_embedding=query_embedding),
+        await retrieve_context(query, "product", db, top_k=2, query_embedding=query_embedding),
+    )
 
 
 async def build_attachment_context(attachments: TypingList[Attachment]) -> str:
@@ -225,10 +240,8 @@ async def send_message(
         "shuashua": "practice",    # 真题、题库、解题方法、知识点（刷刷专用独立知识库）
     }
     category = agent_category_map.get(req.agent_type)
-    (rag_context, retrieved_chunks), (global_context, global_chunks), (product_context, product_chunks) = await asyncio.gather(
-        retrieve_context(req.message, category, db, top_k=5),
-        retrieve_context(req.message, "global", db, top_k=2),
-        retrieve_context(req.message, "product", db, top_k=2),
+    (rag_context, retrieved_chunks), (global_context, global_chunks), (product_context, product_chunks) = (
+        await retrieve_agent_knowledge(req.message, category, db)
     )
     if global_context:
         rag_context = (rag_context + "\n---\n" + global_context) if rag_context else global_context
@@ -396,10 +409,8 @@ async def stream_message(
         "shuashua": "practice",    # 真题、题库、解题方法、知识点（刷刷专用独立知识库）
     }
     category = agent_category_map.get(req.agent_type)
-    (rag_context, retrieved_chunks), (global_context, global_chunks), (product_context, product_chunks) = await asyncio.gather(
-        retrieve_context(req.message, category, db, top_k=5),
-        retrieve_context(req.message, "global", db, top_k=2),
-        retrieve_context(req.message, "product", db, top_k=2),
+    (rag_context, retrieved_chunks), (global_context, global_chunks), (product_context, product_chunks) = (
+        await retrieve_agent_knowledge(req.message, category, db)
     )
     if global_context:
         rag_context = (rag_context + "\n---\n" + global_context) if rag_context else global_context
@@ -561,8 +572,7 @@ async def stream_message(
         },
     )
 
-
-
+@router.get("/conversations", response_model=List[ConversationListItem])
 def list_conversations(
     agent_type: str = None,
     current_user: User = Depends(get_current_user),

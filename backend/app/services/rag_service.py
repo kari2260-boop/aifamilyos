@@ -15,6 +15,7 @@ async def retrieve_context(
     db: Session,
     top_k: int = 3,
     min_score: float = 0.3,
+    query_embedding: Optional[List[float]] = None,
 ) -> Tuple[str, Optional[List[dict]]]:
     """
     检索知识库中与 query 相关的内容
@@ -23,10 +24,13 @@ async def retrieve_context(
         (拼接后的上下文文本, 检索到的chunks元数据列表)
         如果没有相关内容或 embedding 未配置，返回 ("", None)
     """
-    try:
-        query_embedding = await get_embedding(query)
-    except Exception:
-        # Embedding 未配置或失败，静默跳过
+    if query_embedding is None:
+        try:
+            query_embedding = await get_embedding(query)
+        except Exception:
+            # Embedding 未配置或失败，静默跳过
+            return ("", None)
+    if not query_embedding:
         return ("", None)
 
     embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
