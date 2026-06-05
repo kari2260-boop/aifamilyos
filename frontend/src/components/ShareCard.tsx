@@ -1,7 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import html2canvas from "html2canvas";
+import QRCode from "qrcode";
+
+const HOME_URL = "https://aifamily.xin/";
 
 interface ShareCardProps {
   visible: boolean;
@@ -27,6 +30,17 @@ export default function ShareCard({
   const cardRef = useRef<HTMLDivElement>(null);
   const [generating, setGenerating] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!visible) return;
+    QRCode.toDataURL(HOME_URL, {
+      width: 160,
+      margin: 1,
+      color: { dark: "#203247", light: "#FFFFFF" },
+      errorCorrectionLevel: "M",
+    }).then(setQrCodeUrl).catch(() => setQrCodeUrl(null));
+  }, [visible]);
 
   if (!visible) return null;
 
@@ -58,7 +72,12 @@ export default function ShareCard({
         const blob = await (await fetch(imageUrl)).blob();
         const file = new File([blob], `${agentName}-分享.png`, { type: "image/png" });
         if (navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: "AI家庭成长OS" });
+          await navigator.share({
+            files: [file],
+            title: "AI未来家庭",
+            text: "扫码进入 AI 未来家庭，和 AI 教育顾问聊聊",
+            url: HOME_URL,
+          });
           return;
         }
       } catch {}
@@ -128,13 +147,26 @@ export default function ShareCard({
               </div>
 
               {/* 底部品牌 */}
-              <div style={{ padding: "12px 20px", borderTop: "1px solid #eee", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ padding: "14px 20px", borderTop: "1px solid #eee", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
                 <div>
-                  <p style={{ fontSize: "12px", fontWeight: "500", color: "#333", margin: 0 }}>AI 家庭成长 OS</p>
-                  <p style={{ fontSize: "11px", color: "#999", margin: "2px 0 0 0" }}>让每个家庭都有AI教育顾问</p>
+                  <p style={{ fontSize: "13px", fontWeight: "600", color: "#203247", margin: 0 }}>AI 未来家庭</p>
+                  <p style={{ fontSize: "11px", color: "#777", margin: "3px 0 0 0" }}>让每个家庭都有 AI 教育顾问</p>
+                  <p style={{ fontSize: "11px", color: "#9A7954", fontWeight: "600", margin: "8px 0 0 0" }}>aifamily.xin</p>
                 </div>
-                <div style={{ width: "32px", height: "32px", background: "linear-gradient(135deg, #f59e0b, #ea580c)", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <span style={{ color: "#fff", fontSize: "11px", fontWeight: "bold" }}>AI</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "7px", flexShrink: 0 }}>
+                  <div style={{ textAlign: "right" }}>
+                    <p style={{ fontSize: "10px", color: "#555", fontWeight: "600", margin: 0 }}>扫码进入</p>
+                    <p style={{ fontSize: "9px", color: "#999", margin: "2px 0 0 0" }}>发现更多智能体</p>
+                  </div>
+                  {qrCodeUrl ? (
+                    <img
+                      src={qrCodeUrl}
+                      alt="AI未来家庭首页二维码"
+                      style={{ width: "58px", height: "58px", display: "block", border: "1px solid #eee", borderRadius: "4px" }}
+                    />
+                  ) : (
+                    <div style={{ width: "58px", height: "58px", backgroundColor: "#f4f1ed", borderRadius: "4px" }} />
+                  )}
                 </div>
               </div>
             </div>
@@ -142,10 +174,10 @@ export default function ShareCard({
             {/* 操作按钮 */}
             <button
               onClick={handleGenerate}
-              disabled={generating}
+              disabled={generating || !qrCodeUrl}
               className="w-full py-3 bg-white text-gray-800 rounded-xl text-sm font-medium shadow disabled:opacity-50"
             >
-              {generating ? "生成中..." : "生成分享图片"}
+              {generating ? "生成中..." : qrCodeUrl ? "生成分享图片" : "二维码生成中..."}
             </button>
             <button onClick={handleClose} className="w-full py-3 bg-white/20 text-white rounded-xl text-sm font-medium border border-white/30">
               取消
