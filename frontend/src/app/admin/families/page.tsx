@@ -39,6 +39,7 @@ interface FamilyDetail {
   assessment_quota: number;
   report_quota: number;
   owner_phone: string;
+  owner_user_id: string;
   conversations_count: number;
   children: Child[];
 }
@@ -70,6 +71,9 @@ export default function AdminFamiliesPage() {
   const [grantNote, setGrantNote] = useState("");
   const [granting, setGranting] = useState(false);
   const [filter, setFilter] = useState<"all" | "expiring">("all");
+  const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [resettingPassword, setResettingPassword] = useState(false);
 
   useEffect(() => {
     api.adminFamilies().then(setFamilies).catch(() => router.push("/admin"));
@@ -109,6 +113,22 @@ export default function AdminFamiliesPage() {
       alert(e instanceof Error ? e.message : "开通失败");
     } finally {
       setGranting(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetPasswordUserId || !newPassword) return;
+    if (newPassword.length < 6) { alert("密码不能少于6位"); return; }
+    setResettingPassword(true);
+    try {
+      await api.request(`/admin/users/${resetPasswordUserId}/reset-password?new_password=${encodeURIComponent(newPassword)}`, { method: "POST" });
+      alert("密码已重置成功");
+      setResetPasswordUserId(null);
+      setNewPassword("");
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "重置失败");
+    } finally {
+      setResettingPassword(false);
     }
   };
 
@@ -255,6 +275,12 @@ export default function AdminFamiliesPage() {
                             续费
                           </button>
                         )}
+                        <button
+                          onClick={() => { setResetPasswordUserId(detail.owner_user_id); setNewPassword(""); }}
+                          className="px-4 py-2 border border-rose-300 text-rose-700 rounded-lg text-sm font-medium hover:bg-rose-50 transition"
+                        >
+                          重置密码
+                        </button>
                       </div>
                     )}
 
@@ -293,6 +319,39 @@ export default function AdminFamiliesPage() {
           </p>
         )}
       </div>
+
+      {/* 重置密码弹窗 */}
+      {resetPasswordUserId && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50" onClick={() => setResetPasswordUserId(null)}>
+          <div className="w-full max-w-md bg-background rounded-t-3xl p-6 pb-10 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-muted rounded-full mx-auto" />
+            <h2 className="text-lg font-bold text-center">重置用户密码</h2>
+            <p className="text-sm text-muted-foreground text-center">直接为该用户设置新密码，用户下次用新密码登录即可</p>
+            <input
+              type="text"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="输入新密码（至少6位）"
+              className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={handleResetPassword}
+                disabled={resettingPassword || !newPassword}
+                className="flex-1 py-3 bg-rose-500 text-white rounded-xl text-sm font-medium disabled:opacity-50"
+              >
+                {resettingPassword ? "重置中..." : "确认重置"}
+              </button>
+              <button
+                onClick={() => { setResetPasswordUserId(null); setNewPassword(""); }}
+                className="flex-1 py-3 bg-muted text-muted-foreground rounded-xl text-sm"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

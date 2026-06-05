@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.database import get_db
-from app.utils.auth import require_admin
+from app.utils.auth import require_admin, hash_password
 from app.models.models import (
     User, Family, ChildProfile, Conversation, Message, RiskFlag, UsageLog,
 )
@@ -113,6 +113,7 @@ def get_family_detail(
         "assessment_quota": family.assessment_quota or 0,
         "report_quota": family.report_quota or 0,
         "owner_phone": owner.phone if owner else "未知",
+        "owner_user_id": str(family.owner_user_id),
         "conversations_count": conv_count,
         "created_at": family.created_at.isoformat() if family.created_at else None,
         "children": [
@@ -306,3 +307,23 @@ def usage_daily(
             for d in daily_data
         ],
     }
+
+
+@router.post("/users/{user_id}/reset-password")
+def admin_reset_user_password(
+    user_id: UUID,
+    new_password: str,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """管理员直接重置指定用户的密码"""
+    if len(new_password) < 6:
+        raise HTTPException(status_code=400, detail="密码不能少于6位")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    user.password_hash = hash_password(new_password)
+    db.commit()
+    return {"status": "ok", "message": f"用户 {user.phone} 的密码已重置"}
