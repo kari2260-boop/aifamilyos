@@ -29,7 +29,7 @@ export default function CourseDetailPage() {
   const [showPaywall, setShowPaywall] = useState(false);
   const [currentPlan, setCurrentPlan] = useState("free");
 
-  const isLocked = course?.locked === true || course?.is_free === false;
+  const isLocked = course?.locked === true;
   const canOpenExternalVideo = course?.content_type === "video" && !!course?.external_url;
 
   useEffect(() => {
@@ -46,7 +46,7 @@ export default function CourseDetailPage() {
     try {
       const data = await api.getCourse(id);
       setCourse(data);
-      if (data.locked === true || data.is_free === false) {
+      if (data.locked === true) {
         setShowPaywall(true);
       }
     } catch {

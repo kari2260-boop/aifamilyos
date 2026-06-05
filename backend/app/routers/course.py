@@ -32,6 +32,34 @@ from app.services.knowledge_ingestion import ingest_content
 
 router = APIRouter(tags=["courses"])
 
+PLAN_HIERARCHY = {"free": 0, "trial_9_9": 0, "community_3480": 1, "pilot_9800": 2}
+MINIMUM_PLAN_HIERARCHY = {"free": 0, "community": 1, "pilot": 2}
+
+
+def get_user_plan_level(current_user: User, db: Session) -> int:
+    from app.models.models import Family
+    from app.routers.subscription import get_effective_plan
+
+    family = db.query(Family).filter(Family.owner_user_id == current_user.id).first()
+    if not family:
+        return 0
+    return PLAN_HIERARCHY.get(get_effective_plan(family), 0)
+
+
+def course_is_locked(course: Course, user_level: int) -> bool:
+    required_level = MINIMUM_PLAN_HIERARCHY.get(course.minimum_plan or "community", 1)
+    return user_level < required_level
+
+
+def course_response(course: Course, user_level: int, include_content: bool = True) -> dict:
+    locked = course_is_locked(course, user_level)
+    data = {column.name: getattr(course, column.name) for column in Course.__table__.columns}
+    data["locked"] = locked
+    if locked and include_content:
+        data["content_markdown"] = None
+        data["external_url"] = None
+    return data
+
 
 # --- 公开接口 ---
 
@@ -123,21 +151,10 @@ def list_courses(
     minimum_plan 层级：free(0) ⊆ community(1) ⊆ pilot(2)
     用户只能看到 minimum_plan <= 用户等级 的课程
     """
-    from app.models.models import Family
-
-    # 获取用户等级
-    plan_hierarchy = {"free": 0, "trial_9_9": 0, "community_3480": 1, "pilot_9800": 2}
-    min_plan_hierarchy = {"free": 0, "community": 1, "pilot": 2}
-
-    user_level = 0  # 未登录 = 只能看免费
-    if current_user:
-        family = db.query(Family).filter(Family.owner_user_id == current_user.id).first()
-        if family:
-            user_plan = family.subscription_plan or "free"
-            user_level = plan_hierarchy.get(user_plan, 0)
+    user_level = get_user_plan_level(current_user, db)
 
     # 根据用户等级决定可见的 minimum_plan 集合
-    visible_plans = [p for p, lvl in min_plan_hierarchy.items() if lvl <= user_level]
+    visible_plans = [p for p, lvl in MINIMUM_PLAN_HIERARCHY.items() if lvl <= user_level]
 
     query = db.query(Course).filter(Course.is_published == True)
     if hasattr(Course, 'minimum_plan'):
@@ -154,12 +171,13 @@ def list_courses(
     courses = query.order_by(Course.sort_order, Course.created_at.desc()).offset(
         (page - 1) * size
     ).limit(size).all()
-    return courses
+    return [course_response(course, user_level, include_content=False) for course in courses]
 
 
 @router.get("/courses/{course_id}", response_model=CourseDetailResponse)
 def get_course(
     course_id: UUID,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """获取课程详情"""
@@ -168,7 +186,7 @@ def get_course(
         raise HTTPException(status_code=404, detail="课程不存在")
     if not course.is_published:
         raise HTTPException(status_code=404, detail="课程未发布")
-    return course
+    return course_response(course, get_user_plan_level(current_user, db))
 
 
 @router.post("/courses/{course_id}/progress", response_model=CourseProgressResponse)

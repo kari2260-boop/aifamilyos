@@ -39,6 +39,7 @@ class CourseResponse(BaseModel):
     is_published: bool = False
     is_free: bool = False
     minimum_plan: str = "community"  # free / community / pilot (最低要求等级)
+    locked: bool = False
     recommended_by: Optional[str] = None
     sort_order: int = 0
     created_at: datetime

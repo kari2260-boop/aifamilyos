@@ -26,7 +26,11 @@ def upgrade():
     # 3. 设置 minimum_plan 为 NOT NULL
     op.alter_column('courses', 'minimum_plan', nullable=False)
 
-    # 4. 插入课程分类（如果不存在）
+    # 4. 给 courses 表添加 category_slugs 数组字段（多分类标签）
+    op.add_column('courses', sa.Column('category_slugs', postgresql.ARRAY(sa.String()), nullable=True))
+    op.execute("UPDATE courses SET category_slugs = '{}' WHERE category_slugs IS NULL")
+
+    # 5. 插入课程分类（如果不存在）
     op.execute("""
         INSERT INTO course_categories (id, name, slug, sort_order, created_at)
         VALUES
