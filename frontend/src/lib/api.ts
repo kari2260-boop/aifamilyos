@@ -1,19 +1,16 @@
 // API地址自动推断：
-// - NEXT_PUBLIC_API_URL 显式配置时优先使用
+// - 浏览器端默认走同域 /api，避免 HTTPS 页面请求到 HTTP 后端
+// - 本地直连 localhost:3000 时，显式转到同主机 :8000/api
 // - SSR/容器内使用 SERVER_API_URL 或 Docker 服务名
-// - 浏览器直连 :3000 时走同主机 :8000/api
-// - 正式域名/Nginx 反代时走同域 /api
 export function getApiBase(): string {
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
+  if (typeof window !== "undefined") {
+    if (window.location.protocol === "http:" && window.location.port === "3000") {
+      return `${window.location.protocol}//${window.location.hostname}:8000/api`;
+    }
+    return "/api";
   }
-  if (typeof window === "undefined") {
-    return process.env.SERVER_API_URL || "http://backend:8000/api";
-  }
-  if (window.location.port === "3000") {
-    return `${window.location.protocol}//${window.location.hostname}:8000/api`;
-  }
-  return "/api";
+
+  return process.env.SERVER_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://backend:8000/api";
 }
 
 const API_BASE = getApiBase();
@@ -107,13 +104,20 @@ class ApiClient {
     return data;
   }
 
-  async resetPassword(phone: string, newPassword: string) {
+  async resetPassword(phone: string, code: string, newPassword: string) {
     const data = await this.request("/auth/reset-password", {
       method: "POST",
-      body: JSON.stringify({ phone, new_password: newPassword }),
+      body: JSON.stringify({ phone, code, new_password: newPassword }),
     });
     localStorage.setItem("token", data.access_token);
     return data;
+  }
+
+  async sendResetPasswordCode(phone: string) {
+    return this.request("/auth/reset-password/code", {
+      method: "POST",
+      body: JSON.stringify({ phone }),
+    });
   }
 
   async getMe() {
@@ -283,6 +287,13 @@ class ApiClient {
   async adminCreateConsultant(data: { name: string; title?: string; bio?: string; specialties?: string; price_per_session?: number }) {
     return this.request("/booking/admin/consultants", {
       method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async adminUpdateConsultant(consultantId: string, data: { name?: string; title?: string; bio?: string; specialties?: string; price_per_session?: number; is_active?: boolean }) {
+    return this.request(`/booking/admin/consultants/${consultantId}`, {
+      method: "PUT",
       body: JSON.stringify(data),
     });
   }

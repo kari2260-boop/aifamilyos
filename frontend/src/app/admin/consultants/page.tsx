@@ -23,6 +23,10 @@ export default function AdminConsultantsPage() {
   const [form, setForm] = useState({ name: "", title: "", bio: "", specialties: "", price: "" });
   const [saving, setSaving] = useState(false);
 
+  // 编辑专家
+  const [editConsultant, setEditConsultant] = useState<Consultant | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", title: "", bio: "", specialties: "", price: "" });
+
   // 时段设置
   const [scheduleConsultant, setScheduleConsultant] = useState<Consultant | null>(null);
   const [scheduleWeekday, setScheduleWeekday] = useState(0);
@@ -68,6 +72,46 @@ export default function AdminConsultantsPage() {
       setScheduleSlots("");
     } catch {
       alert("设置失败");
+    }
+  };
+
+  const handleEditOpen = (c: Consultant) => {
+    setEditConsultant(c);
+    setEditForm({
+      name: c.name,
+      title: c.title || "",
+      bio: c.bio || "",
+      specialties: c.specialties || "",
+      price: c.price_per_session > 0 ? String(c.price_per_session / 100) : "0",
+    });
+  };
+
+  const handleEditSave = async () => {
+    if (!editConsultant || !editForm.name.trim()) return;
+    setSaving(true);
+    try {
+      await api.adminUpdateConsultant(editConsultant.id, {
+        name: editForm.name.trim(),
+        title: editForm.title.trim() || undefined,
+        bio: editForm.bio.trim() || undefined,
+        specialties: editForm.specialties.trim() || undefined,
+        price_per_session: editForm.price ? Number(editForm.price) * 100 : 0,
+      });
+      setEditConsultant(null);
+      loadConsultants();
+    } catch {
+      alert("保存失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggleActive = async (c: Consultant) => {
+    try {
+      await api.adminUpdateConsultant(c.id, { is_active: !c.is_active });
+      loadConsultants();
+    } catch {
+      alert("操作失败");
     }
   };
 
@@ -142,6 +186,60 @@ export default function AdminConsultantsPage() {
           </div>
         )}
 
+        {/* 编辑专家弹窗 */}
+        {editConsultant && (
+          <div className="bg-card rounded-xl p-4 shadow-sm border border-orange-200 space-y-3">
+            <p className="text-sm font-medium text-foreground">编辑专家 - {editConsultant.name}</p>
+            <input
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm"
+              placeholder="姓名 *"
+              value={editForm.name}
+              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+            />
+            <input
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm"
+              placeholder="头衔（如：教育学博士）"
+              value={editForm.title}
+              onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+            />
+            <input
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm"
+              placeholder="擅长领域"
+              value={editForm.specialties}
+              onChange={(e) => setEditForm({ ...editForm, specialties: e.target.value })}
+            />
+            <textarea
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm"
+              placeholder="个人介绍"
+              value={editForm.bio}
+              onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
+              rows={3}
+            />
+            <input
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm"
+              placeholder="单次咨询价格（元）"
+              type="number"
+              value={editForm.price}
+              onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={handleEditSave}
+                disabled={saving}
+                className="flex-1 bg-orange-500 text-white py-2 rounded-lg text-sm disabled:opacity-50"
+              >
+                {saving ? "保存中..." : "保存修改"}
+              </button>
+              <button
+                onClick={() => setEditConsultant(null)}
+                className="flex-1 bg-muted text-muted-foreground py-2 rounded-lg text-sm"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 时段设置弹窗 */}
         {scheduleConsultant && (
           <div className="bg-card rounded-xl p-4 shadow-sm border border-purple-200 space-y-3">
@@ -198,12 +296,26 @@ export default function AdminConsultantsPage() {
               <span className="text-xs text-muted-foreground">
                 {c.session_duration}分钟 / {c.price_per_session > 0 ? `¥${c.price_per_session / 100}` : "免费"}
               </span>
-              <button
-                onClick={() => { setScheduleConsultant(c); setScheduleSlots(""); }}
-                className="text-xs text-purple-500 font-medium"
-              >
-                设置时段
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => handleEditOpen(c)}
+                  className="text-xs text-orange-500 font-medium"
+                >
+                  编辑
+                </button>
+                <button
+                  onClick={() => handleToggleActive(c)}
+                  className={`text-xs font-medium ${c.is_active ? "text-red-400" : "text-green-500"}`}
+                >
+                  {c.is_active ? "停用" : "启用"}
+                </button>
+                <button
+                  onClick={() => { setScheduleConsultant(c); setScheduleSlots(""); }}
+                  className="text-xs text-purple-500 font-medium"
+                >
+                  设置时段
+                </button>
+              </div>
             </div>
           </div>
         ))}
