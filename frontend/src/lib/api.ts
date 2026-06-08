@@ -104,20 +104,13 @@ class ApiClient {
     return data;
   }
 
-  async resetPassword(phone: string, code: string, newPassword: string) {
+  async resetPassword(phone: string, newPassword: string) {
     const data = await this.request("/auth/reset-password", {
       method: "POST",
-      body: JSON.stringify({ phone, code, new_password: newPassword }),
+      body: JSON.stringify({ phone, new_password: newPassword }),
     });
     localStorage.setItem("token", data.access_token);
     return data;
-  }
-
-  async sendResetPasswordCode(phone: string) {
-    return this.request("/auth/reset-password/code", {
-      method: "POST",
-      body: JSON.stringify({ phone }),
-    });
   }
 
   async getMe() {
