@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,27 +10,9 @@ export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<"login" | "register" | "reset">("login");
   const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
-  const [sendingCode, setSendingCode] = useState(false);
-  const [cooldownSeconds, setCooldownSeconds] = useState(0);
-
-  useEffect(() => {
-    if (cooldownSeconds <= 0) return;
-    const timer = window.setInterval(() => {
-      setCooldownSeconds((seconds) => {
-        if (seconds <= 1) {
-          window.clearInterval(timer);
-          return 0;
-        }
-        return seconds - 1;
-      });
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [cooldownSeconds]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +23,7 @@ export default function LoginPage() {
       if (mode === "register") {
         await api.register(phone, password);
       } else if (mode === "reset") {
-        await api.resetPassword(phone, code, password);
+        await api.resetPassword(phone, password);
       } else {
         await api.login(phone, password);
       }
@@ -51,25 +32,6 @@ export default function LoginPage() {
       setError(err instanceof Error ? err.message : "操作失败，请重试");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleSendCode = async () => {
-    if (!phone) {
-      setError("请先输入手机号");
-      return;
-    }
-    setError("");
-    setInfo("");
-    setSendingCode(true);
-    try {
-      const result = await api.sendResetPasswordCode(phone);
-      setInfo(result.debug_code ? `开发模式验证码：${result.debug_code}` : "验证码已发送，请查收短信");
-      setCooldownSeconds(result.cooldown_seconds || 60);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "验证码发送失败");
-    } finally {
-      setSendingCode(false);
     }
   };
 
@@ -99,11 +61,6 @@ export default function LoginPage() {
                     {error}
                   </div>
                 )}
-                {info && (
-                  <div className="bg-emerald-50 text-emerald-700 text-sm p-3 rounded-xl">
-                    {info}
-                  </div>
-                )}
 
                 <div>
                   <label className="block text-sm text-muted-foreground mb-1.5">手机号</label>
@@ -116,32 +73,6 @@ export default function LoginPage() {
                     required
                   />
                 </div>
-
-                {mode === "reset" && (
-                  <div>
-                    <label className="block text-sm text-muted-foreground mb-1.5">验证码</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={code}
-                        onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                        placeholder="请输入6位验证码"
-                        className="flex-1 px-4 py-3 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition"
-                        inputMode="numeric"
-                        autoComplete="one-time-code"
-                        required={mode === "reset"}
-                      />
-                      <button
-                        type="button"
-                        onClick={handleSendCode}
-                        disabled={sendingCode || cooldownSeconds > 0}
-                        className="px-4 py-3 bg-muted text-foreground rounded-xl text-sm font-medium disabled:opacity-50 whitespace-nowrap"
-                      >
-                        {sendingCode ? "发送中..." : cooldownSeconds > 0 ? `${cooldownSeconds}s` : "发送验证码"}
-                      </button>
-                    </div>
-                  </div>
-                )}
 
                 <div>
                   <label className="block text-sm text-muted-foreground mb-1.5">{mode === "reset" ? "新密码" : "密码"}</label>
@@ -187,7 +118,7 @@ export default function LoginPage() {
                 )}
                 {mode === "reset" && (
                   <p className="text-xs text-muted-foreground leading-5">
-                    重置需要先验证短信验证码，验证码有效期 5 分钟。
+                    重置后会直接写入新密码并自动登录。当前版本先用手机号找回，后续可再加短信验证码。
                   </p>
                 )}
               </form>
