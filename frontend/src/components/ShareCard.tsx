@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import html2canvas from "html2canvas";
 import QRCode from "qrcode";
 
-const HOME_URL = "https://aifamily.xin/";
+const HOME_URL = "https://awesomic.top/";
 
 interface ShareCardProps {
   visible: boolean;
@@ -151,7 +151,7 @@ export default function ShareCard({
                 <div>
                   <p style={{ fontSize: "13px", fontWeight: "600", color: "#203247", margin: 0 }}>AI 未来家庭</p>
                   <p style={{ fontSize: "11px", color: "#777", margin: "3px 0 0 0" }}>让每个家庭都有 AI 教育顾问</p>
-                  <p style={{ fontSize: "11px", color: "#9A7954", fontWeight: "600", margin: "8px 0 0 0" }}>aifamily.xin</p>
+                  <p style={{ fontSize: "11px", color: "#9A7954", fontWeight: "600", margin: "8px 0 0 0" }}>awesomic.top</p>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "7px", flexShrink: 0 }}>
                   <div style={{ textAlign: "right" }}>

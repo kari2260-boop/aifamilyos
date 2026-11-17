@@ -43,13 +43,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     openGraph: {
       type: "website",
       locale: "zh_CN",
-      url: `https://aifamily.xin/chat/${agentType}`,
+      url: `https://awesomic.top/chat/${agentType}`,
       siteName: "AI未来家庭",
       title: meta.title,
       description: meta.description,
       images: [
         {
-          url: `https://aifamily.xin${meta.image}`,
+          url: `https://awesomic.top${meta.image}`,
           width: 800,
           height: 800,
           alt: meta.title,
@@ -60,7 +60,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       card: "summary",
       title: meta.title,
       description: meta.description,
-      images: [`https://aifamily.xin${meta.image}`],
+      images: [`https://awesomic.top${meta.image}`],
     },
   };
 }
